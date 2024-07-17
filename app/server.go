@@ -5,7 +5,9 @@ import (
 	// Uncomment this block to pass the first stage
 	"net"
 	"os"
-	"log"
+	"io"
+	"errors"
+	// "log"
 	// "bufio"
 	// "strings" 
 )
@@ -21,31 +23,39 @@ func main() {
 		fmt.Println("Failed to bind to port 6379")
 		os.Exit(1)
 	}
-	conn, err := l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			os.Exit(1)
+		}
+		go handleConn(conn);
+		
+
 	}
+	// return nil
+}
+func handleConn(conn net.Conn) {
 	defer conn.Close()
 	for {
-		// reader := bufio.NewReader(conn)
-		// command, err := reader.ReadString('\n')
-		// command := make([]byte, 6)
-		// _, err := conn.Read(command)
 		buffer := make([]byte, 1024)
-		_, err = conn.Read(buffer)
+		n, err := conn.Read(buffer)
+		if errors.Is(err, io.EOF) {
+			break
+		}
 		if err != nil {
 			fmt.Println("Error reading from connection:", err.Error())
-			return
+			// return errors.Wrap()
 		}
-		log.Printf("command: \n%s", string(buffer))
-		// command = strings.TrimSpace(command)
-		// fmt.Println([]byte(buffer[:n]))
-		// fmt.Println(string(buffer))
-		if string(buffer[8:12]) == "PING" {
-			conn.Write([]byte("+PONG\r\n"))
+		if string(buffer[:n]) == "PING" {
+			_, err = conn.Write([]byte("+PONG\r\n"))
+			if err != nil {
+				fmt.Println(err, "Write response")
+				// return
+			}
 		} else {
 			conn.Write([]byte("-Err Unknown Command\r\n"))
 		}
 	}
+	// return err
 }
