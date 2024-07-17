@@ -29,56 +29,35 @@ func main() {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
-		// go handleConn(conn);
-		defer conn.Close()
-		for {
-			buffer := make([]byte, 1024)
-			_, err := conn.Read(buffer)
-			if errors.Is(err, io.EOF) {
-				break
-			}
+		go handleConn(conn);
+		
+
+	}
+	// return nil
+}
+func handleConn(conn net.Conn) {
+	defer conn.Close()
+	for {
+		buffer := make([]byte, 1024)
+		_, err := conn.Read(buffer)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			fmt.Println("Error reading from connection:", err.Error())
+			// return err
+			os.Exit(1)
+		}
+		if string(buffer[8:12]) == "PING" {
+			_, err = conn.Write([]byte("+PONG\r\n"))
 			if err != nil {
-				fmt.Println("Error reading from connection:", err.Error())
+				fmt.Println(err, "Write response")
 				// return err
 				os.Exit(1)
 			}
-			if string(buffer[8:12]) == "PING" {
-				_, err = conn.Write([]byte("+PONG\r\n"))
-				if err != nil {
-					fmt.Println(err, "Write response")
-					// return err
-					os.Exit(1)
-				}
-			} else {
-				conn.Write([]byte("-Err Unknown Command\r\n"))
-			}
+		} else {
+			conn.Write([]byte("-Err Unknown Command\r\n"))
 		}
-
 	}
+	// return err
 }
-
-// func handleConn(conn net.Conn) {
-// 	defer conn.Close()
-// 	for {
-// 		buffer := make([]byte, 1024)
-// 		_, err := conn.Read(buffer)
-// 		if errors.Is(err, io.EOF) {
-// 			break
-// 		}
-// 		if err != nil {
-// 			fmt.Println("Error reading from connection:", err.Error())
-// 			// return err
-// 			os.Exit(1)
-// 		}
-// 		if string(buffer[8:12]) == "PING" {
-// 			_, err = conn.Write([]byte("+PONG\r\n"))
-// 			if err != nil {
-// 				fmt.Println(err, "Write response")
-// 				// return err
-// 				os.Exit(1)
-// 			}
-// 		} else {
-// 			conn.Write([]byte("-Err Unknown Command\r\n"))
-// 		}
-// 	}
-// }
