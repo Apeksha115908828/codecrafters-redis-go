@@ -110,7 +110,7 @@ func handleGet(store *Storage, conn net.Conn, args Array) {
 func handleSet(store *Storage, conn net.Conn, args Array) {
 	key := args[0].(BulkString).Value
 	value := args[1].(BulkString).Value
-	expiry := 1000
+	expiry := 1000000
 	if len(args) > 3 {
 		if strings.ToUpper(args[2].(BulkString).Value) == "PX" {
 			expiry, _ = strconv.Atoi(args[3].(BulkString).Value)
