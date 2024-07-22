@@ -25,13 +25,24 @@ func main() {
 		port = os.Args[2]
 	}
 	role := "master"
-	master_host := "0.0.0.0"
-	master_port := port
+	// master_host := "0.0.0.0"
+	// master_port := port
 	if len(os.Args) > 4 {
 		role = "slave"
-		master := Parse(os.Args[4])
-		master_host = master[0].(BulkString).Value
-		master_port = master[0].(BulkString).Value
+		// master, _, err := ParseString(os.Args[4])
+		// fmt.Println(master)
+		// master_host, _, err = ParseString(os.Args[4][0])
+		// if err != nil {
+		// 	fmt.Println("Error while parsing the master data")
+		// 	os.Exit(1)
+		// }
+		// master_port, _, err = ParseString(os.Args[4][1])
+		// if err != nil {
+		// 	fmt.Println("Error while parsing the master data")
+		// 	os.Exit(1)
+		// }
+		// master_host = os.Args[4][0]
+		// master_port = os.Args[4][1]
 	}
 	l, err := net.Listen("tcp", "0.0.0.0:" + port)
 	if err != nil {
@@ -45,7 +56,7 @@ func main() {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
-		go handleConn(store, conn);
+		go handleConn(store, conn, role);
 	}
 	// return nil
 }
@@ -113,7 +124,7 @@ func handleEcho(conn net.Conn, args Array) {
 	}
 }
 
-func handleConn(store *Storage, conn net.Conn) {
+func handleConn(store *Storage, conn net.Conn, role string) {
 	defer conn.Close()
 	for {
 		buffer := make([]byte, 1024)
@@ -163,6 +174,7 @@ func handleConn(store *Storage, conn net.Conn) {
 			handleGet(store, conn, args)
 			break
 		case "INFO":
+
 			info := SimpleString("role:"+role).Encode()
 			_, err := conn.Write([]byte(info))
 			if err != nil {
