@@ -32,7 +32,7 @@ func main() {
 	info["master_port"] = port
 	info["master_replid"] = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
 	info["master_repl_offset"] = "0"
-	var replicas [](&net.Conn)
+	var replicas [](net.Conn){}
 	if len(os.Args) > 4 {
 		info["role"] = "slave"
 		info["master_host"] = strings.Split(os.Args[4], " ")[0]
@@ -181,7 +181,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			break
 		case "PSYNC":
 			// fmt.Println(SimpleString("FULLRESYNC" + info["master_replid"] + info["master_repl_offset"]).Encode())
-			replicas = append(replicas, &conn)
+			replicas = append(replicas, conn)
 			conn.Write([]byte(SimpleString("FULLRESYNC " + info["master_replid"] + " " + info["master_repl_offset"]).Encode()))
 			emptyrdb, err := hex.DecodeString("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2")
 			if err != nil {
@@ -197,7 +197,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 		case "SET":
 			handleSet(store, conn, args)
 			for _, rep := range replicas {
-				(*rep).Write([]byte(buffer))
+				(rep).Write([]byte(buffer))
 			}
 			break
 		case "GET":
