@@ -136,7 +136,7 @@ func handleEcho(conn net.Conn, args Array) {
 	}
 }
 
-func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas []net.Conn) {
+func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas []*net.Conn) {
 	defer conn.Close()
 	for {
 		buffer := make([]byte, 1024)
