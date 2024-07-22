@@ -53,7 +53,7 @@ func handleGet(store *Storage, conn net.Conn, args Array) {
 	key := args[0].(BulkString).Value
 	val := GetFromDataBase(store, key);
 	fmt.Println("Value in get %s", val)
-	value := SimpleString(val).Encode()
+	value := BulkString(val).Encode()
 	_, err := conn.Write([]byte(value))
 	if err != nil {
 		fmt.Println("Error while writing", err)
