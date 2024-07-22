@@ -19,12 +19,12 @@ func main() {
 	fmt.Println("Logs from your program will appear here!")
 
 	// Uncomment this block to pass the first stage
-	info := map[string]string
+	info := make(map[string]string)
 	port := "6379"
 	if len(os.Args) > 2 {
 		port = os.Args[2]
 	}
-	info["role"] := "master"
+	info["role"] = "master"
 	// master_host := "0.0.0.0"
 	// master_port := port
 	if len(os.Args) > 4 {
