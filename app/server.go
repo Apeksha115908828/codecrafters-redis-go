@@ -70,7 +70,7 @@ func handleSet(store *Storage, conn net.Conn, args Array) {
 			expiry, _ = strconv.Atoi(args[3].(BulkString).Value)
 		} else {  // case with EX 
 			expiry, _ = strconv.Atoi(args[3].(BulkString).Value)
-			expiry = expiry * 1000
+			// expiry = expiry * 1000
 		}
 		
 	}
