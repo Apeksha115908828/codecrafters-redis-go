@@ -27,20 +27,20 @@ type Storage struct {
 }
 
 
-func GetFromDataBase(store *Storage, key string) (string) {
+func GetFromDataBase(store *Storage, key string) (string, bool) {
 	log.Println("came to get from database......")
 
 	if time.Now().After(store.db[key].Expiry) {
 		log.Println("figured out it is expired")
 		delete(store.db, key)
-		return ""
+		return "", false
 	}
 	_, ok := store.db[key]
 	if !ok {
 		fmt.Errorf("Error while retrieving the value of the entry")
-		return ""
+		return "", false
 	}
-	return store.db[key].Value
+	return store.db[key].Value, true
 }
 
 // func AddToDataBase(store *Storage, args Array) {

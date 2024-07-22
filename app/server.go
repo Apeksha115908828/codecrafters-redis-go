@@ -51,23 +51,15 @@ func handlePing(conn net.Conn) {
 
 func handleGet(store *Storage, conn net.Conn, args Array) {
 	key := args[0].(BulkString).Value
-	val := GetFromDataBase(store, key);
+	val, _ := GetFromDataBase(store, key);
 	fmt.Println("Value in get %s", val)
-	if(val == "") {
-		value := SimpleString("-1").Encode()
-		fmt.Println("Value in get %s", value)
-		_, err := conn.Write([]byte(value))
-		if err != nil {
-			fmt.Println("Error while writing", err)
-			os.Exit(1)
-		}
-	} else {
-		value := SimpleString(val).Encode()
-		_, err := conn.Write([]byte(value))
-		if err != nil {
-			fmt.Println("Error while writing", err)
-			os.Exit(1)
-		}
+	value := SimpleString(val).Encode()
+	// value := found ? SimpleString(val).Encode() : SimpleString("").Encode()
+	fmt.Println("Value in get %s", value)
+	_, err := conn.Write([]byte(value))
+	if err != nil {
+		fmt.Println("Error while writing", err)
+		os.Exit(1)
 	}
 }
 
