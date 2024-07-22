@@ -25,26 +25,15 @@ func main() {
 		port = os.Args[2]
 	}
 	info["role"] = "master"
-	// master_host := "0.0.0.0"
-	// master_port := port
+	master_host := "0.0.0.0"
+	master_port := port
 	info["master_replid"] = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
 	info["master_repl_offset"] = "0"
 	if len(os.Args) > 4 {
 		info["role"] = "slave"
-		// master, _, err := ParseString(os.Args[4])
-		// fmt.Println(master)
-		// master_host, _, err = ParseString(os.Args[4][0])
-		// if err != nil {
-		// 	fmt.Println("Error while parsing the master data")
-		// 	os.Exit(1)
-		// }
-		// master_port, _, err = ParseString(os.Args[4][1])
-		// if err != nil {
-		// 	fmt.Println("Error while parsing the master data")
-		// 	os.Exit(1)
-		// }
-		// master_host = os.Args[4][0]
-		// master_port = os.Args[4][1]
+		info["master_host"] = strings.Split(os.Args[4], " ")[0]
+		info["master_port"] = strings.Split(os.Args[4], " ")[1]
+		sendHandshake(conn, info)
 	}
 	l, err := net.Listen("tcp", "0.0.0.0:" + port)
 	if err != nil {
@@ -62,6 +51,16 @@ func main() {
 	}
 	// return nil
 }
+
+func sendHandshake(conn net.Conn, info map[string]string) (){
+	replica, err := net.Dial("tcp", info["master_host"] + ":" + info["master_port"])
+	if err != nil {
+		fmt.Println("Error while connecting to the master .....")
+		os.Exit(1)
+	}
+	replica.Write([]byte("*1\r\n$4\r\nPING\r\n"))
+}
+
 func (d SimpleString) Encode() string {
 	return fmt.Sprintf("+%s\r\n", d)
 }
