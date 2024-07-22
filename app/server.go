@@ -55,6 +55,7 @@ func handleGet(store *Storage, conn net.Conn, args Array) {
 	fmt.Println("Value in get %s", val)
 	if(val == "") {
 		value := SimpleString("-1").Encode()
+		fmt.Println("Value in get %s", value)
 		_, err := conn.Write([]byte(value))
 		if err != nil {
 			fmt.Println("Error while writing", err)
