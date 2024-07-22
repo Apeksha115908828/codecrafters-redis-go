@@ -211,6 +211,9 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			break
 		case "GET":
 			handleGet(store, conn, args)
+			for _, rep := range *replicas {
+				(*rep).Write([]byte(string(buffer[:n])))
+			}
 			break
 		case "INFO":
 
