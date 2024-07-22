@@ -10,8 +10,8 @@ import (
 	// "log"
 	// "bytes"
 	// "bufio"
-	// "strconv"
-	// "strings" 
+	"strconv"
+	"strings" 
 )
 
 func main() {
@@ -25,22 +25,77 @@ func main() {
 		fmt.Println("Failed to bind to port 6379")
 		os.Exit(1)
 	}
+	store := NewStore()
 	for {
 		conn, err := l.Accept()
 		if err != nil {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
-		go handleConn(conn);
-		
-
+		go handleConn(store, conn);
 	}
 	// return nil
 }
 func (d SimpleString) Encode() string {
 	return fmt.Sprintf("+%s\r\n", d)
 }
-func handleConn(conn net.Conn) {
+
+func handlePing(conn net.Conn) {
+	_, err := conn.Write([]byte("+PONG\r\n"))
+	if err != nil {
+		fmt.Println(err, "Write response")
+		// return err
+		os.Exit(1)
+	}
+}
+
+func handleGet(store *Storage, conn net.Conn, args Array) {
+	key := args[0].(BulkString).Value
+	val := GetFromDataBase(store, key);
+	fmt.Println("Value in get %s", val)
+	value := SimpleString(val).Encode()
+	_, err := conn.Write([]byte(value))
+	if err != nil {
+		fmt.Println("Error while writing", err)
+		os.Exit(1)
+	}
+}
+
+func handleSet(store *Storage, conn net.Conn, args Array) {
+	key := args[0].(BulkString).Value
+	value := args[1].(BulkString).Value
+	expiry := 1000
+	if len(args) > 3 {
+		if strings.ToUpper(args[2].(BulkString).Value) == "PX" {
+			expiry, _ = strconv.Atoi(args[3].(BulkString).Value)
+		} else {  // case with EX 
+			expiry, _ = strconv.Atoi(args[3].(BulkString).Value)
+			expiry = expiry * 1000
+		}
+		
+	}
+	AddToDataBase(store, key, value, expiry)
+	_, err := conn.Write([]byte(SimpleString("OK").Encode()))
+	if err != nil {
+		fmt.Println(err, "Write Response")
+		os.Exit(1)
+	}
+}
+
+func handleEcho(conn net.Conn, args Array) {
+	arr, ok := args[0].(BulkString)
+	if !ok {
+		fmt.Println("args[0] should be a BulkString")
+		os.Exit(1)
+	}
+	_, err := conn.Write([]byte(SimpleString(arr.Value).Encode()))
+	if err != nil {
+		fmt.Println(err, "Write Response")
+		os.Exit(1)
+	}
+}
+
+func handleConn(store *Storage, conn net.Conn) {
 	defer conn.Close()
 	for {
 		buffer := make([]byte, 1024)
@@ -53,15 +108,6 @@ func handleConn(conn net.Conn) {
 			// return err
 			os.Exit(1)
 		}
-		// command := string(buffer)
-		// if string(buffer[0]) == "*" {
-		// 	array, _, err := ParseArray(buffer)
-		// 	if err != nil {
-		// 		os.Exit(1)
-		// 	}
-		// 	_, err = conn.Write([]byte("+" + array[1] + "\r\n"))
-		// 	// return array[1]
-		// }
 		parsedData, _, err := Parse(buffer)
 		if err != nil {
 			fmt.Println("Unable to parse the data")
@@ -85,44 +131,30 @@ func handleConn(conn net.Conn) {
 		if len(arr) > 1 {
 			args = arr[1:]
 		}
-		if command.Value == "PING" {
-			fmt.Println("came here.........")
-			// fmt.Println("data: ", string(data))
-			_, err = conn.Write([]byte("+PONG\r\n"))
-			if err != nil {
-				fmt.Println(err, "Write response")
-				// return err
-				os.Exit(1)
-			}
-		} else if command.Value == "ECHO" {
-			// if len(command) < 2 {
-			// 	os.Exit(1)
-			// }
-			// _, err = conn.Write([]byte("+PONG\r\n"))
-			// fmt.Println("data: ", string(data))
-			arr, ok := args[0].(BulkString)
-			if !ok {
-				fmt.Println("args[0] should be a BulkString")
-				os.Exit(1)
-			}
-			_, err = conn.Write([]byte(SimpleString(arr.Value).Encode()))
-			if err != nil {
-				fmt.Println(err, "Write Response")
-				os.Exit(1)
-			}
-		} else {
+		switch strings.ToUpper(command.Value) {
+		case "PING":
+			handlePing(conn)
+			break
+		case "ECHO":
+			handleEcho(conn, args)
+			break
+		case "SET":
+			handleSet(store, conn, args)
+			break
+		case "GET":
+			handleGet(store, conn, args)
+			break
+		case "default":
 			conn.Write([]byte("-Err Unknown Command\r\n"))
 		}
-		// if string(buffer[8:12]) == "PING" {
-		// 	_, err = conn.Write([]byte("+PONG\r\n"))
-		// 	if err != nil {
-		// 		fmt.Println(err, "Write response")
-		// 		// return err
-		// 		os.Exit(1)
-		// 	}
+		// if command.Value == "PING" {
+		// 	fmt.Println("came here.........")
+		// 	// fmt.Println("data: ", string(data))
+		// 	handlePing(conn)
+		// } else if command.Value == "ECHO" {
+		// 	handleEcho(conn, args)
 		// } else {
 		// 	conn.Write([]byte("-Err Unknown Command\r\n"))
 		// }
 	}
-	// return err
 }
