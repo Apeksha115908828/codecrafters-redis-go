@@ -153,6 +153,15 @@ func handleConn(store *Storage, conn net.Conn) {
 		case "GET":
 			handleGet(store, conn, args)
 			break
+		case "INFO":
+			role := "master"
+			info := SimpleString("role:"+role).Encode()
+			_, err := conn.Write([]byte(info))
+			if err != nil {
+				fmt.Println(err, "Write response")
+				// return err
+				os.Exit(1)
+			}
 		case "default":
 			conn.Write([]byte("-Err Unknown Command\r\n"))
 		}
