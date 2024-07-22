@@ -180,6 +180,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string) {
 			break
 		case "PSYNC":
 			// fmt.Println(SimpleString("FULLRESYNC" + info["master_replid"] + info["master_repl_offset"]).Encode())
+			info["replicas"] = append(info["replicas"], &conn)
 			conn.Write([]byte(SimpleString("FULLRESYNC " + info["master_replid"] + " " + info["master_repl_offset"]).Encode()))
 			emptyrdb, err := hex.DecodeString("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2")
 			if err != nil {
@@ -194,6 +195,9 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string) {
 			break
 		case "SET":
 			handleSet(store, conn, args)
+			for _, rep in := range info["replicas"] {
+				(*rep).Write([]byte(buffer))
+			}
 			break
 		case "GET":
 			handleGet(store, conn, args)
