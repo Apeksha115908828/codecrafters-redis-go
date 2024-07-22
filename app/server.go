@@ -25,15 +25,16 @@ func main() {
 		port = os.Args[2]
 	}
 	info["role"] = "master"
-	master_host := "0.0.0.0"
-	master_port := port
+	info["master_host"] = "0.0.0.0"
+	info["master_port"] = port
 	info["master_replid"] = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
 	info["master_repl_offset"] = "0"
 	if len(os.Args) > 4 {
 		info["role"] = "slave"
 		info["master_host"] = strings.Split(os.Args[4], " ")[0]
 		info["master_port"] = strings.Split(os.Args[4], " ")[1]
-		sendHandshake(conn, info)
+		fmt.Println("sending handshake message........")
+		sendHandshake(info)
 	}
 	l, err := net.Listen("tcp", "0.0.0.0:" + port)
 	if err != nil {
@@ -52,7 +53,7 @@ func main() {
 	// return nil
 }
 
-func sendHandshake(conn net.Conn, info map[string]string) (){
+func sendHandshake(info map[string]string) (){
 	replica, err := net.Dial("tcp", info["master_host"] + ":" + info["master_port"])
 	if err != nil {
 		fmt.Println("Error while connecting to the master .....")
