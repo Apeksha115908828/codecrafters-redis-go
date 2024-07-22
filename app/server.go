@@ -178,7 +178,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string) {
 			// info := SimpleString("role:"+role).Encode()
 			info_string := ""
 			for key, value := range info {
-				info_string = info_string + "\n" + SimpleString(key + ":" + value).Encode()
+				info_string = info_string + SimpleString(key + ":" + value).Encode()
 			}
 			_, err := conn.Write([]byte(info_string))
 			if err != nil {
