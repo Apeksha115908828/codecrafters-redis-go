@@ -19,16 +19,16 @@ func main() {
 	fmt.Println("Logs from your program will appear here!")
 
 	// Uncomment this block to pass the first stage
-	//
+	info := map[string]string
 	port := "6379"
 	if len(os.Args) > 2 {
 		port = os.Args[2]
 	}
-	role := "master"
+	info["role"] := "master"
 	// master_host := "0.0.0.0"
 	// master_port := port
 	if len(os.Args) > 4 {
-		role = "slave"
+		info["role"] = "slave"
 		// master, _, err := ParseString(os.Args[4])
 		// fmt.Println(master)
 		// master_host, _, err = ParseString(os.Args[4][0])
@@ -56,7 +56,7 @@ func main() {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
-		go handleConn(store, conn, role);
+		go handleConn(store, conn, info);
 	}
 	// return nil
 }
@@ -124,7 +124,7 @@ func handleEcho(conn net.Conn, args Array) {
 	}
 }
 
-func handleConn(store *Storage, conn net.Conn, role string) {
+func handleConn(store *Storage, conn net.Conn, info map[string]string) {
 	defer conn.Close()
 	for {
 		buffer := make([]byte, 1024)
@@ -175,8 +175,12 @@ func handleConn(store *Storage, conn net.Conn, role string) {
 			break
 		case "INFO":
 
-			info := SimpleString("role:"+role).Encode()
-			_, err := conn.Write([]byte(info))
+			// info := SimpleString("role:"+role).Encode()
+			info_string := ""
+			for key, value := range info {
+				info_string = info_string + "\n" + SimpleString(key + ":" + value).Encode()
+			}
+			_, err := conn.Write([]byte(info_string))
 			if err != nil {
 				fmt.Println(err, "Write response")
 				// return err
