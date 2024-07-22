@@ -27,6 +27,8 @@ func main() {
 	info["role"] = "master"
 	// master_host := "0.0.0.0"
 	// master_port := port
+	info["master_replid"] = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
+	info["master_repl_offset"] = 0
 	if len(os.Args) > 4 {
 		info["role"] = "slave"
 		// master, _, err := ParseString(os.Args[4])
