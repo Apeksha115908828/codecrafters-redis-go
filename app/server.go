@@ -21,8 +21,8 @@ func main() {
 	// Uncomment this block to pass the first stage
 	//
 	port := "6379"
-	if len(os.Args) > 1 {
-		port = os.Args[1]
+	if len(os.Args) > 2 {
+		port = os.Args[2]
 	}
 	l, err := net.Listen("tcp", "0.0.0.0:" + port)
 	if err != nil {
