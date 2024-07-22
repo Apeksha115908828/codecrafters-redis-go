@@ -178,11 +178,16 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string) {
 		case "INFO":
 
 			// info := SimpleString("role:"+role).Encode()
-			info_string := ""
+			// info_string := ""
+			var info_string strings.Builder
+			// info_string.WriteString("")
+			fmt.Println("len(info) = ", len(info))
 			for key, value := range info {
-				info_string = info_string + SimpleString(key + ":" + value).Encode()
+				info_string.WriteString(SimpleString(key + ":" + value).Encode())
+				// info_string = info_string+SimpleString(key + ":" + value).Encode()
+				fmt.Println("info_string = ", info_string.String())
 			}
-			_, err := conn.Write([]byte(info_string))
+			_, err := conn.Write([]byte(info_string.String()))
 			if err != nil {
 				fmt.Println(err, "Write response")
 				// return err
