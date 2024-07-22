@@ -51,9 +51,12 @@ func handlePing(conn net.Conn) {
 
 func handleGet(store *Storage, conn net.Conn, args Array) {
 	key := args[0].(BulkString).Value
-	val, _ := GetFromDataBase(store, key);
+	val, found := GetFromDataBase(store, key);
 	fmt.Println("Value in get %s", val)
-	value := SimpleString(val).Encode()
+	value := "$-1/r/n"
+	if found {
+		value = SimpleString(val).Encode()
+	}
 	// value := found ? SimpleString(val).Encode() : SimpleString("").Encode()
 	fmt.Println("Value in get %s", value)
 	_, err := conn.Write([]byte(value))
