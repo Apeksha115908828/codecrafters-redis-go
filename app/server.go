@@ -174,6 +174,9 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string) {
 		case "PING":
 			handlePing(conn)
 			break
+		case "REPLCONF":
+			conn.Write([]byte(SimpleString("OK").Encode()))
+			break
 		case "ECHO":
 			handleEcho(conn, args)
 			break
