@@ -53,7 +53,7 @@ func handleGet(store *Storage, conn net.Conn, args Array) {
 	key := args[0].(BulkString).Value
 	val, found := GetFromDataBase(store, key);
 	fmt.Println("Value in get %s", val)
-	value := "$-1/r/n"
+	value := "-1/r/n"
 	if found {
 		value = SimpleString(val).Encode()
 	}
