@@ -145,7 +145,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 	defer conn.Close()
 	for {
 		buffer := make([]byte, 1024)
-		_, err := conn.Read(buffer)
+		n, err := conn.Read(buffer)
 		if errors.Is(err, io.EOF) {
 			break
 		}
@@ -203,10 +203,10 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			break
 		case "SET":
 			handleSet(store, conn, args)
-			fmt.Println("Set called on current server, calling set on other replicas: ", len(*replicas), []byte(string(buffer)))
+			fmt.Println("Set called on current server, calling set on other replicas: ", len(*replicas), string(buffer))
 			
 			for _, rep := range *replicas {
-				(*rep).Write([]byte(string(buffer)))
+				(*rep).Write([]byte(string(buffer[:n])))
 			}
 			break
 		case "GET":
