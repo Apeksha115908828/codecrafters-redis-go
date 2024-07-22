@@ -178,7 +178,8 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string) {
 			conn.Write([]byte(SimpleString("OK").Encode()))
 			break
 		case "PSYNC":
-			conn.Write([]byte(SimpleString("FULLRESYNC" + info["master_replid"] + info["master_repl_offset"]).Encode()))
+			// fmt.Println(SimpleString("FULLRESYNC" + info["master_replid"] + info["master_repl_offset"]).Encode())
+			conn.Write([]byte(SimpleString("FULLRESYNC " + info["master_replid"] + " " + info["master_repl_offset"]).Encode()))
 			break
 		case "ECHO":
 			handleEcho(conn, args)
