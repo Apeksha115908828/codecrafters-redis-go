@@ -205,7 +205,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			handleSet(store, conn, args)
 			fmt.Println("Set called on current server, calling set on other replicas: ", len(*replicas))
 			for _, rep := range *replicas {
-				(*rep).Write([]byte(string(buffer)))
+				(*rep).Write(buffer)
 			}
 			break
 		case "GET":
