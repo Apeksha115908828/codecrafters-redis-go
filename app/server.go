@@ -24,6 +24,15 @@ func main() {
 	if len(os.Args) > 2 {
 		port = os.Args[2]
 	}
+	role := "master"
+	master_host := "0.0.0.0"
+	master_port := port
+	if len(os.Args) > 4 {
+		role = "slave"
+		master := Parse(os.Args[4])
+		master_host = master[0].(BulkString).Value
+		master_port = master[0].(BulkString).Value
+	}
 	l, err := net.Listen("tcp", "0.0.0.0:" + port)
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
@@ -154,7 +163,6 @@ func handleConn(store *Storage, conn net.Conn) {
 			handleGet(store, conn, args)
 			break
 		case "INFO":
-			role := "master"
 			info := SimpleString("role:"+role).Encode()
 			_, err := conn.Write([]byte(info))
 			if err != nil {
