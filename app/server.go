@@ -138,7 +138,7 @@ func sendHandshake(info map[string]string) (net.Conn){
 		fmt.Println("Error while connecting to the master .....")
 		os.Exit(1)
 	}
-	time.Sleep(1 * time.Second)
+	// time.Sleep(1 * time.Second)
 	fmt.Println("sending psync")
 	_, err = replica.Write([]byte("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"))
 	if err != nil {
