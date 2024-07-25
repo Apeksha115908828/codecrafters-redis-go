@@ -102,7 +102,7 @@ func handleReplica(store *Storage, info map[string]string) {
 				response := "+" + val + "\r\n"
 				conn.Write([]byte(response))
 			} else if len(command) > i && command[i] == "REPLCONF" {
-				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"
+				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" len(i) + "\r\n" + i + "\r\n"
 				conn.Write([]byte(response))
 				i = i + 4
 			} else {
