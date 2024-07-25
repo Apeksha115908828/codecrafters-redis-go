@@ -35,7 +35,7 @@ func main() {
 	replicas := map[int]net.Conn{}
 	store := NewStore()
 	if len(os.Args) > 4 {
-		handleReplica(store, info)
+		go handleReplica(store, info)
 	}
 	l, err := net.Listen("tcp", "0.0.0.0:" + port)
 	if err != nil {
