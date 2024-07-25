@@ -79,6 +79,7 @@ func handleReplica(store *Storage, info map[string]string) {
 				key := command[i+2]
 				value := command[i+4]
 				expiry := 100000000
+				r := 4
 				if len(command) > i+8 {
 					if strings.ToUpper(command[i+6]) == "PX" {
 						expiry, _ = strconv.Atoi(command[i+8])
@@ -86,12 +87,14 @@ func handleReplica(store *Storage, info map[string]string) {
 						expiry, _ = strconv.Atoi(command[i+8])
 						// expiry = expiry * 1000
 					}
-					
+					r = 8
 				}
+				i = i + r + 2
 				AddToDataBase(store, key, value, expiry)
 			} else if len(command) > i && command[i] == "GET" {
 				// value := rdb[command[i+2]]
 				key := command[i+2]
+				i = i + 4
 				val, found := GetFromDataBase(store, key);
 				if found {
 					val = SimpleString(val).Encode()
