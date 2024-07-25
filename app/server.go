@@ -106,7 +106,8 @@ func handleReplica(store *Storage, info map[string]string) {
 				conn.Write([]byte(response))
 			} else if len(command) > i && command[i] == "REPLCONF" {
 				offset := strconv.Itoa(replicaOffset)
-				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + len(offset).(string) + "\r\n" + offset + "\r\n"
+				lengthoffset := len(offset)
+				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + lengthoffset + "\r\n" + offset + "\r\n"
 				conn.Write([]byte(response))
 				i = i + 4
 			} else {
