@@ -36,22 +36,22 @@ func main() {
 	store := NewStore()
 	if len(os.Args) > 4 {
 		handleReplica(store, info)
-	} else {
-		l, err := net.Listen("tcp", "0.0.0.0:" + port)
+	}
+	l, err := net.Listen("tcp", "0.0.0.0:" + port)
+	if err != nil {
+		fmt.Println("Failed to bind to port", port)
+		os.Exit(1)
+	}
+	for {
+		conn, err := l.Accept()
+		fmt.Println("Received a connection request.......")
 		if err != nil {
-			fmt.Println("Failed to bind to port", port)
+			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
-		for {
-			conn, err := l.Accept()
-			fmt.Println("Received a connection request.......")
-			if err != nil {
-				fmt.Println("Error accepting connection: ", err.Error())
-				os.Exit(1)
-			}
-			go handleConn(store, conn, info, replicas);
-		}
+		go handleConn(store, conn, info, replicas);
 	}
+	// }
 }
 
 func handleReplica(store *Storage, info map[string]string) {
