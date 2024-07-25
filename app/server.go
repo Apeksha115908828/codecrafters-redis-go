@@ -71,10 +71,11 @@ func handleReplica(store *Storage, info map[string]string) {
 			conn.Write([]byte(err.Error()))
 		}
 		command := strings.Split(string(buffer[:n]), "\r\n")
-		fmt.Print(n)
+		// fmt.Print(n)
 		for i := 2; i < len(command); i++ {
 			if command[i] == "SET" {
 				// rdb[command[i+2]] = command[i+4]
+				fmt.Println("processing SET on replica..........")
 				key := command[i+2]
 				value := command[i+4]
 				expiry := 100000000
