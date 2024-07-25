@@ -72,40 +72,40 @@ func handleReplica(store *Storage, info map[string]string) {
 		}
 		command := strings.Split(string(buffer[:n]), "\r\n")
 		
-		// for i := 2; i < len(command); i++ {
-		if len(command) > 2 && command[2] == "SET" {
-			// rdb[command[i+2]] = command[i+4]
-			fmt.Println("processing SET on replica..........")
-			key := command[4]
-			value := command[6]
-			expiry := 100000000
-			if len(command) > 10 {
-				if strings.ToUpper(command[8]) == "PX" {
-					expiry, _ = strconv.Atoi(command[10])
-				} else {  // case with EX 
-					expiry, _ = strconv.Atoi(command[10])
-					// expiry = expiry * 1000
+		for i := 2; i < len(command); i++ {
+			if len(command) > i && command[i] == "SET" {
+				// rdb[command[i+2]] = command[i+4]
+				fmt.Println("processing SET on replica..........")
+				key := command[i+2]
+				value := command[i+4]
+				expiry := 100000000
+				if len(command) > i+8 {
+					if strings.ToUpper(command[i+6]) == "PX" {
+						expiry, _ = strconv.Atoi(command[i+8])
+					} else {  // case with EX 
+						expiry, _ = strconv.Atoi(command[i+8])
+						// expiry = expiry * 1000
+					}
+					
 				}
-				
+				AddToDataBase(store, key, value, expiry)
+			} else if len(command) > i && command[i] == "GET" {
+				// value := rdb[command[i+2]]
+				key := command[i+2]
+				val, found := GetFromDataBase(store, key);
+				if found {
+					val = SimpleString(val).Encode()
+				}
+				response := "+" + val + "\r\n"
+				conn.Write([]byte(response))
+			} else if len(command) > i && command[i] == "REPLCONF" {
+				fmt.Print("HERE")
+				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"
+				conn.Write([]byte(response))
+			} else {
+				fmt.Print("in else block command =", command)
 			}
-			AddToDataBase(store, key, value, expiry)
-		} else if len(command) > 2 && command[2] == "GET" {
-			// value := rdb[command[i+2]]
-			key := command[4]
-			val, found := GetFromDataBase(store, key);
-			if found {
-				val = SimpleString(val).Encode()
-			}
-			response := "+" + val + "\r\n"
-			conn.Write([]byte(response))
-		} else if len(command) > 2 && command[2] == "REPLCONF" {
-			fmt.Print("HERE")
-			response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"
-			conn.Write([]byte(response))
-		} else {
-			fmt.Print("in else block command =", command)
 		}
-
 	}
 }
 
