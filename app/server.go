@@ -294,8 +294,8 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			// res = fmt.Sprintf("$%d\r\n%s\r\n", len(emptyrdb), emptyrdb)
 			// conn.Write([]byte(res))
 			conn.Write([]byte("$" + strconv.Itoa(len(emptyrdb)) + "\r\n" + string(emptyrdb)))
-			time.Sleep(1 * time.Second)
-			conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n"))
+			// time.Sleep(1 * time.Second)
+			// conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n"))
 			break
 		case "ECHO":
 			handleEcho(conn, args)
