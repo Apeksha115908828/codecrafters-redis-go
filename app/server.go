@@ -67,6 +67,8 @@ func handleReplica(store *Storage, info map[string]string) {
 	for {
 		buffer := make([]byte, 1024)
 		n, err := conn.Read(buffer)
+		cmdSize := n
+		replicaOffset := 0
 		if err != nil {
 			conn.Write([]byte(err.Error()))
 		}
@@ -102,12 +104,14 @@ func handleReplica(store *Storage, info map[string]string) {
 				response := "+" + val + "\r\n"
 				conn.Write([]byte(response))
 			} else if len(command) > i && command[i] == "REPLCONF" {
-				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + len(i) + "\r\n" + i + "\r\n"
+				offset := strconv.Itoa(replicaOffset)
+				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + len(offset) + "\r\n" + offset + "\r\n"
 				conn.Write([]byte(response))
 				i = i + 4
 			} else {
 				fmt.Print("in else block command =", command)
 			}
+			replicaOffset += cmdSize
 		}
 	}
 }
