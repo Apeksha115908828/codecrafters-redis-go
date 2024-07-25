@@ -94,7 +94,7 @@ func handleReplica(store *Storage, info map[string]string) {
 				}
 				i = i + r + 2
 				AddToDataBase(store, key, value, expiry)
-				replicaOffset += len(command)
+				replicaOffset += len(buffer)
 			} else if len(command) > i && command[i] == "GET" {
 				// value := rdb[command[i+2]]
 				key := command[i+2]
@@ -105,14 +105,14 @@ func handleReplica(store *Storage, info map[string]string) {
 				}
 				response := "+" + val + "\r\n"
 				conn.Write([]byte(response))
-				replicaOffset += len(command)
+				replicaOffset += len(buffer)
 			} else if len(command) > i && command[i] == "REPLCONF" {
 				offset := strconv.Itoa(replicaOffset)
 				lengthoffset := len(offset)
 				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + strconv.Itoa(lengthoffset) + "\r\n" + offset + "\r\n"
 				conn.Write([]byte(response))
 				i = i + 4
-				replicaOffset += len(command)
+				replicaOffset += len(buffer)
 				fmt.Println("replicaOffset = ", replicaOffset, "............................")
 			} else {
 				fmt.Print("in else block command =", command)
