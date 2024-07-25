@@ -113,6 +113,7 @@ func handleReplica(store *Storage, info map[string]string) {
 				conn.Write([]byte(response))
 				i = i + 4
 				replicaOffset += len(command)
+				fmt.Println("replicaOffset = ", replicaOffset, "............................")
 			} else {
 				fmt.Print("in else block command =", command)
 			}
