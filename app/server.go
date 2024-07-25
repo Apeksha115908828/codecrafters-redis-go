@@ -74,7 +74,7 @@ func handleReplica(store *Storage, info map[string]string) {
 			conn.Write([]byte(err.Error()))
 		}
 		command := strings.Split(string(buffer[:n]), "\r\n")
-		
+		fmt.Println("2, len(buffer)=", len(buffer), ".................")
 		for i := 2; i < len(command); i++ {
 			if len(command) > i && command[i] == "SET" {
 				// rdb[command[i+2]] = command[i+4]
