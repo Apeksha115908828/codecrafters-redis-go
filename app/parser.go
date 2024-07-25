@@ -33,6 +33,8 @@ func Parse(data []byte) (interface{}, []byte, error) {
 		parsed, data, err = ParseArray(data)
 	case '$':
 		// BulkString
+		parsed, data, err = ParseBulkString(data)
+	case '+':
 		parsed, data, err = ParseString(data)
 	case ':':
 		parsed, data, err = ParseInteger(data)
@@ -48,7 +50,7 @@ func Parse(data []byte) (interface{}, []byte, error) {
 
 func ParseInteger(data []byte) (Integer, []byte, error) {
 	if len(data) < 4 {
-		return 0, data, errors.New("Integer needs at least 4 chracter")
+		return 0, data, errors.New("Integer needs at least 4 characters")
 	}
 	data = data[1:]
 	hasSign := data[1] == '+' || data[1] == '-'
@@ -71,7 +73,20 @@ func ParseInteger(data []byte) (Integer, []byte, error) {
 	return Integer(integer), data, err
 }
 
-func ParseString(data []byte) (BulkString, []byte, error) {
+func ParseString(data []byte) (string, []byte, error) {
+	if len(data) < 4 {
+		return "", data, errors.New("simple string needs atleast 4 characters")
+	}
+	data = data[1:]
+	strData := bytes.SplitN(data, []byte(CLRF), 2)
+	if len(strData) != 2 {
+		return "", data, errors.New("simple string needs end delimiter")
+	}
+	data = strData[1]
+	return string(strData[0]), data, nil
+}
+
+func ParseBulkString(data []byte) (BulkString, []byte, error) {
 	bulkString := BulkString {
 		Value:  "",
 		IsNull: false,
