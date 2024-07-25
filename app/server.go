@@ -68,6 +68,7 @@ func handleReplica(store *Storage, info map[string]string) {
 		buffer := make([]byte, 1024)
 		n, err := conn.Read(buffer)
 		cmdSize := n
+		fmt.Println("n=", n, ".................")
 		replicaOffset := 0
 		if err != nil {
 			conn.Write([]byte(err.Error()))
