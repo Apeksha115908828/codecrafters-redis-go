@@ -68,13 +68,13 @@ func handleReplica(store *Storage, info map[string]string) {
 		buffer := make([]byte, 1024)
 		n, err := conn.Read(buffer)
 		// cmdSize := n
-		fmt.Println("len(buffer)=", n, ".................")
+		// fmt.Println("len(buffer)=", n, ".................")
 		replicaOffset := 0
 		if err != nil {
 			conn.Write([]byte(err.Error()))
 		}
 		command := strings.Split(string(buffer[:n]), "\r\n")
-		fmt.Println("2, len(buffer)=", len(buffer), ".................")
+		// fmt.Println("2, len(buffer)=", len(buffer), ".................")
 		for i := 2; i < len(command); i++ {
 			if len(command) > i && command[i] == "SET" {
 				// rdb[command[i+2]] = command[i+4]
