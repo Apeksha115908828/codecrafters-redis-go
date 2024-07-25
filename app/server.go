@@ -102,7 +102,6 @@ func handleReplica(store *Storage, info map[string]string) {
 				response := "+" + val + "\r\n"
 				conn.Write([]byte(response))
 			} else if len(command) > i && command[i] == "REPLCONF" {
-				fmt.Print("HERE")
 				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"
 				conn.Write([]byte(response))
 			} else {
@@ -295,6 +294,8 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			// res = fmt.Sprintf("$%d\r\n%s\r\n", len(emptyrdb), emptyrdb)
 			// conn.Write([]byte(res))
 			conn.Write([]byte("$" + strconv.Itoa(len(emptyrdb)) + "\r\n" + string(emptyrdb)))
+			time.Sleep(1 * time.Second)
+			conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n"))
 			break
 		case "ECHO":
 			handleEcho(conn, args)
