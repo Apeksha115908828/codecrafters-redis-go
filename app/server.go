@@ -73,32 +73,32 @@ func handleReplica(store *Storage, info map[string]string) {
 		command := strings.Split(string(buffer[:n]), "\r\n")
 		
 		// for i := 2; i < len(command); i++ {
-		if command[0] == "SET" {
+		if len(command) > 2 && command[2] == "SET" {
 			// rdb[command[i+2]] = command[i+4]
 			fmt.Println("processing SET on replica..........")
-			key := command[1]
-			value := command[2]
+			key := command[4]
+			value := command[6]
 			expiry := 100000000
-			if len(command) > 3 {
-				if strings.ToUpper(command[3]) == "PX" {
-					expiry, _ = strconv.Atoi(command[3])
+			if len(command) > 10 {
+				if strings.ToUpper(command[8]) == "PX" {
+					expiry, _ = strconv.Atoi(command[10])
 				} else {  // case with EX 
-					expiry, _ = strconv.Atoi(command[3])
+					expiry, _ = strconv.Atoi(command[10])
 					// expiry = expiry * 1000
 				}
 				
 			}
 			AddToDataBase(store, key, value, expiry)
-		} else if command[0] == "GET" {
+		} else if len(command) > 2 && command[2] == "GET" {
 			// value := rdb[command[i+2]]
-			key := command[1]
+			key := command[4]
 			val, found := GetFromDataBase(store, key);
 			if found {
 				val = SimpleString(val).Encode()
 			}
 			response := "+" + val + "\r\n"
 			conn.Write([]byte(response))
-		} else if command[0] == "REPLCONF" {
+		} else if len(command) > 2 && command[2] == "REPLCONF" {
 			fmt.Print("HERE")
 			response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"
 			conn.Write([]byte(response))
