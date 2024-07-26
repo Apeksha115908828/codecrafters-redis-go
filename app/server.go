@@ -114,6 +114,8 @@ func handleReplica(store *Storage, info map[string]string) {
 				i = i + 4
 				replicaOffset = replicaOffset + n
 				fmt.Println("replicaOffset = ", replicaOffset, "............................")
+			} else if len(command) > i && command[i] == "PING" {
+				replicaOffset = replicaOffset + n
 			} else {
 				// replicaOffset = replicaOffset + n
 				fmt.Print("in else block command =", command)
