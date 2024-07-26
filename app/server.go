@@ -363,7 +363,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 				os.Exit(1)
 			}
 		case "WAIT":
-			_, err := conn.Write([]byte(":" + len(replicas) + "\r\n"))
+			_, err := conn.Write([]byte(":" + strconv.Itoa(len(replicas)) + "\r\n"))
 			if err != nil {
 				fmt.Println(err, "Write response")
 				// return err
