@@ -64,12 +64,13 @@ func handleReplica(store *Storage, info map[string]string) {
 	
 	// replicas := map[int]net.Conn{}
 	// handleConn(store, conn, info, replicas);
+	replicaOffset := 0
 	for {
 		buffer := make([]byte, 1024)
 		n, err := conn.Read(buffer)
 		// cmdSize := n
 		// fmt.Println("len(buffer)=", n, ".................")
-		replicaOffset := 0
+		
 		if err != nil {
 			conn.Write([]byte(err.Error()))
 		}
