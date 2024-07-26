@@ -362,6 +362,13 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 				// return err
 				os.Exit(1)
 			}
+		case "WAIT":
+			_, err := conn.Write([]byte(":" + len(replicas) + "\r\n"))
+			if err != nil {
+				fmt.Println(err, "Write response")
+				// return err
+				os.Exit(1)
+			}
 		case "default":
 			conn.Write([]byte("-Err Unknown Command\r\n"))
 		}
