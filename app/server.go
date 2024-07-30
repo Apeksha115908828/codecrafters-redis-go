@@ -317,11 +317,11 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			handlePing(conn)
 			break
 		case "REPLCONF":
-			if args[0] == "ACK" {
+			if args[0].(BulkString).Value == "ACK" {
 				if info["role"] == "master" {
 					ackChannel <- true
 				}
-			} else if args[0] == "GETACK" {
+			} else if args[0].(BulkString).Value == "GETACK" {
 				offset := info["master_repl_offset"]
 				lengthoffset := len(offset)
 				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + strconv.Itoa(lengthoffset) + "\r\n" + offset + "\r\n"
