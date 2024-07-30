@@ -15,7 +15,7 @@ import (
 	"time"
 	"encoding/hex"
 )
-
+var ackChannel = make(chan bool)
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
 	fmt.Println("Logs from your program will appear here!")
@@ -32,7 +32,8 @@ func main() {
 	info["master_port"] = port
 	info["master_replid"] = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
 	info["master_repl_offset"] = "0"
-	replicas := map[int]net.Conn{}
+	
+	replicas := map[int]Replica{}
 	store := NewStore()
 	if len(os.Args) > 4 {
 		go handleReplica(store, info)
@@ -227,7 +228,31 @@ func handleEcho(conn net.Conn, args Array) {
 	}
 }
 
-func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas map[int]net.Conn) {
+func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn) {
+	getAckCmd := []byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n")
+	for i := 0; i < length(replicas); i++ {
+		if replicas[i].offset > 0 {
+			bytesWritten := replicas[i].conn.Write(getAckCmd);
+			replicas[i].offset = bytesWritten
+		}
+	}
+	timer := time.After(time.Duration(timeout) * time.Millisecond)
+	acks := 0
+	loop:
+		for acks < count {
+			select {
+			case <-ackChannel:
+				acks++
+				log.Printf("Received ack: %d", acks)
+			case <-timer:
+				log.Printf("Timed out waiting for acks: %d", acks)
+				break loop
+			}
+		}
+		conn.Write([]byte(":" + acks + "\r\n"))
+}
+
+func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas map[int]Replica) {
 	defer conn.Close()
 	for {
 		buffer := make([]byte, 1024)
@@ -290,12 +315,23 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			handlePing(conn)
 			break
 		case "REPLCONF":
+			if args[0] == "ACK" {
+				if info["role"] == "master" {
+					ackChannel <- true
+				}
+			} else if args[0] == "GETACK" {
+				offset := strconv.Itoa(info["master_repl_offset"])
+				lengthoffset := len(offset)
+				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + strconv.Itoa(lengthoffset) + "\r\n" + offset + "\r\n"
+			}
 			conn.Write([]byte(SimpleString("OK").Encode()))
 			break
 		case "PSYNC":
 			// fmt.Println(SimpleString("FULLRESYNC" + info["master_replid"] + info["master_repl_offset"]).Encode())
 			// *replicas = append(*replicas, conn)
-			replicas[len(replicas)] = conn
+			replicas[len(replicas)].conn = conn
+			replicas[len(replicas)].offset = 0
+			replicas[len(replicas)].ackOffset = 0
 			fmt.Println("sending RDB file to complete synchronization.....",)
 			conn.Write([]byte(SimpleString("FULLRESYNC " + info["master_replid"] + " " + info["master_repl_offset"]).Encode()))
 			// res := fmt.Sprintf("+FULLRESYNC %s %d\r\n", info["master_replid"], info["master_repl_offset"])
@@ -322,11 +358,12 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 				// fmt.Println("Set called on current server len(replicas)", len(replicas))
 				for _, replica := range replicas {
 					// fmt.Println("calling set on server *rep = ", replica)
-					_, err := replica.Write([]byte(string(buffer[:n])))
+					bytesWritten, err := replica.conn.Write([]byte(string(buffer[:n])))
 					if err != nil {
 						fmt.Print(err)
 					}
 					time.Sleep(time.Millisecond * 20)
+					replica.offset += bytesWritten
 				}
 			}
 			
@@ -335,7 +372,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			handleGet(store, conn, args)
 			if info["role"] == "master" {
 					for _, replica := range replicas {
-					_, err := replica.Write([]byte(string(buffer[:n])))
+					_, err := replica.conn.Write([]byte(string(buffer[:n])))
 					if err != nil {
 						fmt.Print(err)
 					}
@@ -363,12 +400,15 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 				os.Exit(1)
 			}
 		case "WAIT":
-			_, err := conn.Write([]byte(":" + strconv.Itoa(len(replicas)) + "\r\n"))
-			if err != nil {
-				fmt.Println(err, "Write response")
-				// return err
-				os.Exit(1)
-			}
+			count := strconv.Atoi(args[0])
+			timeout := strconv.Atoi(args[1])
+			response := handleWait(count, timeout)
+			// _, err := conn.Write([]byte(":" + strconv.Itoa(len(replicas)) + "\r\n"))
+			// if err != nil {
+			// 	fmt.Println(err, "Write response")
+			// 	// return err
+			// 	os.Exit(1)
+			// }
 		case "default":
 			conn.Write([]byte("-Err Unknown Command\r\n"))
 		}

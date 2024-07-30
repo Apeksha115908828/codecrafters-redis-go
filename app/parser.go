@@ -22,6 +22,12 @@ type BulkString struct {
 type SimpleString string
 type Integer int
 
+type Replica struct {
+	conn net.Conn
+	offset int
+	ackOffset int
+}
+
 func Parse(data []byte) (interface{}, []byte, error) {
 	dataType := data[0]
 	var (
