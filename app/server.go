@@ -230,10 +230,10 @@ func handleEcho(conn net.Conn, args Array) {
 
 func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn) {
 	getAckCmd := []byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n")
-	for i := 0; i < length(replicas); i++ {
-		if replicas[i].offset > 0 {
-			bytesWritten := replicas[i].conn.Write(getAckCmd);
-			replicas[i].offset = bytesWritten
+	for _, replica := range replicas {
+		if replica.offset > 0 {
+			bytesWritten, _ := replica.conn.Write(getAckCmd);
+			replica.offset = bytesWritten
 		}
 	}
 	timer := time.After(time.Duration(timeout) * time.Millisecond)
@@ -243,13 +243,13 @@ func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn)
 			select {
 			case <-ackChannel:
 				acks++
-				log.Printf("Received ack: %d", acks)
+				fmt.Printf("Received ack: %d", acks)
 			case <-timer:
-				log.Printf("Timed out waiting for acks: %d", acks)
+				fmt.Printf("Timed out waiting for acks: %d", acks)
 				break loop
 			}
 		}
-		conn.Write([]byte(":" + acks + "\r\n"))
+		conn.Write([]byte(":" + strconv.Itoa(acks) + "\r\n"))
 }
 
 func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas map[int]Replica) {
@@ -320,18 +320,35 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 					ackChannel <- true
 				}
 			} else if args[0] == "GETACK" {
-				offset := strconv.Itoa(info["master_repl_offset"])
+				offset := info["master_repl_offset"]
 				lengthoffset := len(offset)
 				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + strconv.Itoa(lengthoffset) + "\r\n" + offset + "\r\n"
+				conn.Write([]byte(response))
 			}
 			conn.Write([]byte(SimpleString("OK").Encode()))
 			break
 		case "PSYNC":
 			// fmt.Println(SimpleString("FULLRESYNC" + info["master_replid"] + info["master_repl_offset"]).Encode())
 			// *replicas = append(*replicas, conn)
-			replicas[len(replicas)].conn = conn
-			replicas[len(replicas)].offset = 0
-			replicas[len(replicas)].ackOffset = 0
+			// r := {
+			// 	conn = conn,
+			// 	offset = 0,
+			// 	ackOffset = 0,
+			// }
+			// replicas[len(replicas)] = r
+			// replicas[len(replicas)] = {
+			// 	conn = conn,
+			// 	offset = 0,
+			// 	ackOffset = 0,
+			// }
+			replicas[len(replicas)] = Replica{
+				conn: conn,
+				offset: 0,
+				ackOffset: 0,
+			}
+			// replicas[len(replicas)].conn = conn
+			// replicas[len(replicas)].offset = 0
+			// replicas[len(replicas)].ackOffset = 0
 			fmt.Println("sending RDB file to complete synchronization.....",)
 			conn.Write([]byte(SimpleString("FULLRESYNC " + info["master_replid"] + " " + info["master_repl_offset"]).Encode()))
 			// res := fmt.Sprintf("+FULLRESYNC %s %d\r\n", info["master_replid"], info["master_repl_offset"])
@@ -400,12 +417,12 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 				os.Exit(1)
 			}
 		case "WAIT":
-			count := strconv.Atoi(args[0])
-			timeout := strconv.Atoi(args[1])
-			response := handleWait(count, timeout)
+			count, _ := strconv.Atoi(args[0].(string))
+			timeout, _ := strconv.Atoi(args[1].(string))
+			handleWait(count, timeout, replicas, conn)
 			// _, err := conn.Write([]byte(":" + strconv.Itoa(len(replicas)) + "\r\n"))
 			// if err != nil {
-			// 	fmt.Println(err, "Write response")
+			// fmt.Println(response, "Write response")
 			// 	// return err
 			// 	os.Exit(1)
 			// }
