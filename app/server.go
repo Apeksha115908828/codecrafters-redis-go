@@ -327,7 +327,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + strconv.Itoa(lengthoffset) + "\r\n" + offset + "\r\n"
 				conn.Write([]byte(response))
 			}
-			conn.Write([]byte(SimpleString("OK").Encode()))
+			// conn.Write([]byte(SimpleString("OK").Encode()))
 			break
 		case "PSYNC":
 			// fmt.Println(SimpleString("FULLRESYNC" + info["master_replid"] + info["master_repl_offset"]).Encode())
