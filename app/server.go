@@ -231,10 +231,12 @@ func handleEcho(conn net.Conn, args Array) {
 func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn) {
 	getAckCmd := []byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n")
 	for _, replica := range replicas {
-		if replica.offset > 0 {
-			bytesWritten, _ := replica.conn.Write(getAckCmd);
-			replica.offset = bytesWritten
-		}
+		// if replica.offset > 0 {
+		bytesWritten, _ := replica.conn.Write(getAckCmd);
+		replica.offset = bytesWritten
+		// } else {
+		// 	acks++
+		// }
 	}
 	timer := time.After(time.Duration(timeout) * time.Millisecond)
 	acks := 0
