@@ -419,8 +419,8 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 				os.Exit(1)
 			}
 		case "WAIT":
-			count, _ := strconv.Atoi(args[0].(string))
-			timeout, _ := strconv.Atoi(args[1].(string))
+			count, _ := strconv.Atoi(args[0].Value)
+			timeout, _ := strconv.Atoi(args[1].Value)
 			handleWait(count, timeout, replicas, conn)
 			// _, err := conn.Write([]byte(":" + strconv.Itoa(len(replicas)) + "\r\n"))
 			// if err != nil {
