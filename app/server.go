@@ -57,29 +57,22 @@ func main() {
 
 func handleReplica(store *Storage, info map[string]string) {
 	info["role"] = "slave"
-	// fmt.Println("strings.Split(os.Args[4] = ", strings.Split(os.Args[4], " "))
 	info["master_host"] = strings.Split(os.Args[4], " ")[0]
 	info["master_port"] = strings.Split(os.Args[4], " ")[1]
 	fmt.Println("sending handshake message........")
 	conn := sendHandshake(info)
-	
-	// replicas := map[int]net.Conn{}
-	// handleConn(store, conn, info, replicas);
+
 	replicaOffset := 0
 	for {
 		buffer := make([]byte, 1024)
 		n, err := conn.Read(buffer)
-		// cmdSize := n
-		// fmt.Println("len(buffer)=", n, ".................")
-		
+
 		if err != nil {
 			conn.Write([]byte(err.Error()))
 		}
 		command := strings.Split(string(buffer[:n]), "\r\n")
-		// fmt.Println("2, len(buffer)=", len(buffer), ".................")
 		for i := 2; i < len(command); i++ {
 			if len(command) > i && command[i] == "SET" {
-				// rdb[command[i+2]] = command[i+4]
 				fmt.Println("processing SET on replica..........")
 				key := command[i+2]
 				value := command[i+4]
@@ -231,12 +224,8 @@ func handleEcho(conn net.Conn, args Array) {
 func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn) {
 	getAckCmd := []byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n")
 	for _, replica := range replicas {
-		// if replica.offset > 0 {
 		bytesWritten, _ := replica.conn.Write(getAckCmd);
 		replica.offset = bytesWritten
-		// } else {
-		// 	acks++
-		// }
 	}
 	timer := time.After(time.Duration(timeout) * time.Millisecond)
 	acks := 0
@@ -272,10 +261,6 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			fmt.Println("Unable to parse the data", string(buffer))
 			os.Exit(1)
 		}
-		// if len(data) != 1 {
-		// 	fmt.Println("not all data are processed, data left: %b", data)
-		// 	os.Exit(1)
-		// }
 		command := BulkString {
 			Value:  "",
 			IsNull: false,
@@ -331,31 +316,14 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			}
 			break
 		case "PSYNC":
-			// fmt.Println(SimpleString("FULLRESYNC" + info["master_replid"] + info["master_repl_offset"]).Encode())
-			// *replicas = append(*replicas, conn)
-			// r := {
-			// 	conn = conn,
-			// 	offset = 0,
-			// 	ackOffset = 0,
-			// }
-			// replicas[len(replicas)] = r
-			// replicas[len(replicas)] = {
-			// 	conn = conn,
-			// 	offset = 0,
-			// 	ackOffset = 0,
-			// }
+			
 			replicas[len(replicas)] = Replica{
 				conn: conn,
 				offset: 0,
 				ackOffset: 0,
 			}
-			// replicas[len(replicas)].conn = conn
-			// replicas[len(replicas)].offset = 0
-			// replicas[len(replicas)].ackOffset = 0
 			fmt.Println("sending RDB file to complete synchronization.....",)
 			conn.Write([]byte(SimpleString("FULLRESYNC " + info["master_replid"] + " " + info["master_repl_offset"]).Encode()))
-			// res := fmt.Sprintf("+FULLRESYNC %s %d\r\n", info["master_replid"], info["master_repl_offset"])
-			// conn.Write([]byte(res))
 			emptyrdb, err := hex.DecodeString("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2")
 			if err != nil {
 				fmt.Println("Error while decoding the hex string with rdb file content")
@@ -401,16 +369,10 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			}
 			break
 		case "INFO":
-
-			// info := SimpleString("role:"+role).Encode()
-			// info_string := ""
 			var info_string strings.Builder
-			// info_string.WriteString("")
-			// fmt.Println("len(info) = ", len(info))
+			
 			for key, value := range info {
 				info_string.WriteString(key + ":" + value)
-				// info_string = info_string+SimpleString(key + ":" + value).Encode()
-				// fmt.Println("info_string = ", info_string.String())
 			}
 			info_string_value := SimpleString(info_string.String()).Encode()
 			_, err := conn.Write([]byte(info_string_value))
@@ -423,12 +385,6 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			count, _ := strconv.Atoi(args[0].(BulkString).Value)
 			timeout, _ := strconv.Atoi(args[1].(BulkString).Value)
 			handleWait(count, timeout, replicas, conn)
-			// _, err := conn.Write([]byte(":" + strconv.Itoa(len(replicas)) + "\r\n"))
-			// if err != nil {
-			// fmt.Println(response, "Write response")
-			// 	// return err
-			// 	os.Exit(1)
-			// }
 		case "default":
 			conn.Write([]byte("-Err Unknown Command\r\n"))
 		}
