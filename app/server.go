@@ -384,6 +384,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 		case "WAIT":
 			count, _ := strconv.Atoi(args[0].(BulkString).Value)
 			timeout, _ := strconv.Atoi(args[1].(BulkString).Value)
+			fmt.Print("Calling handleWait with count = " + count + " timeout = " + timeout)
 			handleWait(count, timeout, replicas, conn)
 		case "default":
 			conn.Write([]byte("-Err Unknown Command\r\n"))
