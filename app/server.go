@@ -67,8 +67,13 @@ func handleReplica(store *Storage, info map[string]string) {
 		buffer := make([]byte, 1024)
 		n, err := conn.Read(buffer)
 
+		// if err != nil {
+		// 	conn.Write([]byte(err.Error()))
+		// }
 		if err != nil {
-			conn.Write([]byte(err.Error()))
+			fmt.Println("Replica Error reading from connection:", err.Error())
+			// return err
+			os.Exit(1)
 		}
 		command := strings.Split(string(buffer[:n]), "\r\n")
 		for i := 2; i < len(command); i++ {
