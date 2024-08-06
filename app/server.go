@@ -102,6 +102,24 @@ func handleReplica(store *Storage, info map[string]string) {
 				conn.Write([]byte(response))
 				replicaOffset = replicaOffset + n
 			} else if len(command) > i && command[i] == "REPLCONF" {
+				fmt.Println("Got Replconf with getack.....................")
+			// case "REPLCONF":
+			// 	if args[0].(BulkString).Value == "ACK" {
+			// 		if info["role"] == "master" {
+			// 			ackChannel <- true
+			// 		}
+			// 	} else if args[0].(BulkString).Value == "GETACK" {
+			// 		offset := info["master_repl_offset"]
+			// 		lengthoffset := len(offset)
+			// 		response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + strconv.Itoa(lengthoffset) + "\r\n" + offset + "\r\n"
+			// 		conn.Write([]byte(response))
+			// 	} else {
+			// 		conn.Write([]byte(SimpleString("OK").Encode()))
+			// 	}
+			// 	break
+
+
+
 				offset := strconv.Itoa(replicaOffset)
 				lengthoffset := len(offset)
 				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + strconv.Itoa(lengthoffset) + "\r\n" + offset + "\r\n"
