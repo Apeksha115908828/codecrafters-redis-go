@@ -72,6 +72,9 @@ func handleReplica(store *Storage, info map[string]string) {
 		}
 		command := strings.Split(string(buffer[:n]), "\r\n")
 		for i := 2; i < len(command); i++ {
+			if len(command) > i {
+				fmt.Println("command = ", command[i])
+			}
 			if len(command) > i && command[i] == "SET" {
 				fmt.Println("processing SET on replica..........")
 				key := command[i+2]
