@@ -144,6 +144,7 @@ func handleReplica(store *Storage, info map[string]string) {
 			
 		}
 	}
+	fmt.Println("Handle Replica ended ..................................")
 }
 
 func sendHandshake(info map[string]string) (net.Conn){
@@ -325,7 +326,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 		switch strings.ToUpper(command.Value) {
 		case "PING":
 			fmt.Println("Received Ping from a replica", conn)
-
+			
 			handlePing(conn)
 			break
 		case "REPLCONF":
@@ -411,7 +412,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 		case "WAIT":
 			count, _ := strconv.Atoi(args[0].(BulkString).Value)
 			timeout, _ := strconv.Atoi(args[1].(BulkString).Value)
-			fmt.Print("Calling handleWait with count = ", count, " timeout = ", timeout)
+			fmt.Println("Calling handleWait with count = ", count, " timeout = ", timeout)
 			handleWait(count, timeout, replicas, conn)
 		case "default":
 			conn.Write([]byte("-Err Unknown Command\r\n"))
