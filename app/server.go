@@ -56,6 +56,7 @@ func main() {
 }
 
 func handleReplica(store *Storage, info map[string]string) {
+	fmt.Println("Handle Replica called")
 	info["role"] = "slave"
 	info["master_host"] = strings.Split(os.Args[4], " ")[0]
 	info["master_port"] = strings.Split(os.Args[4], " ")[1]
@@ -64,6 +65,7 @@ func handleReplica(store *Storage, info map[string]string) {
 
 	replicaOffset := 0
 	for {
+		fmt.Println("Reading from the connection.....")
 		buffer := make([]byte, 1024)
 		n, err := conn.Read(buffer)
 
@@ -78,7 +80,8 @@ func handleReplica(store *Storage, info map[string]string) {
 		command := strings.Split(string(buffer[:n]), "\r\n")
 		for i := 2; i < len(command); i++ {
 			if len(command) > i {
-				fmt.Println("command = ", command[i])
+				fmt.Println("Replica Processing command = ", command[i])
+				// fmt.Println("command = ", command[i])
 			}
 			if len(command) > i && command[i] == "SET" {
 				fmt.Println("processing SET on replica..........")
@@ -414,7 +417,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			count, _ := strconv.Atoi(args[0].(BulkString).Value)
 			timeout, _ := strconv.Atoi(args[1].(BulkString).Value)
 			fmt.Println("Calling handleWait with count = ", count, " timeout = ", timeout)
-			handleWait(count, timeout, replicas, conn)
+			go handleWait(count, timeout, replicas, conn)
 		case "default":
 			conn.Write([]byte("-Err Unknown Command\r\n"))
 		}
