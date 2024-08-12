@@ -256,14 +256,14 @@ func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn)
 	getAckCmd := []byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n")
 	acks := 0
 	for _, replica := range replicas {
-		if count != 3 {
-			fmt.Println("Sending getAck to a replica............replica.offset = ", replica.offset)
-			bytesWritten, _ := replica.conn.Write(getAckCmd);
-			fmt.Println("BytesWritten = ", bytesWritten, "..............")
-			replica.offset = bytesWritten
-		} else {
-			acks++;
-		}
+		// if count != 3 {
+		fmt.Println("Sending getAck to a replica............replica.offset = ", replica.offset)
+		bytesWritten, _ := replica.conn.Write(getAckCmd);
+		fmt.Println("BytesWritten = ", bytesWritten, "..............")
+		replica.offset = bytesWritten
+		// } else {
+		// 	acks++;
+		// }
 	}
 	timer := time.After(time.Duration(timeout) * time.Millisecond)
 	
