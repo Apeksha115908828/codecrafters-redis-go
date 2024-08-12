@@ -254,6 +254,7 @@ func handleEcho(conn net.Conn, args Array) {
 
 func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn) {
 	getAckCmd := []byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n")
+	acks := 0
 	for _, replica := range replicas {
 		fmt.Println("Sending getAck to a replica............")
 		bytesWritten, _ := replica.conn.Write(getAckCmd);
@@ -261,8 +262,8 @@ func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn)
 		replica.offset = bytesWritten
 	}
 	timer := time.After(time.Duration(timeout) * time.Millisecond)
-	acks := 0
-	loop:
+	
+	outer:
 		for acks < count {
 			select {
 			case <-ackChannel:
@@ -270,7 +271,7 @@ func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn)
 				fmt.Printf("Received ack: %d", acks)
 			case <-timer:
 				fmt.Printf("Timed out waiting for acks: %d", acks)
-				break loop
+				break outer
 			}
 		}
 		conn.Write([]byte(":" + strconv.Itoa(acks) + "\r\n"))
