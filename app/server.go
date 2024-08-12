@@ -157,7 +157,7 @@ func sendHandshake(info map[string]string) (net.Conn){
 		fmt.Println("Error while connecting to the master .....")
 		os.Exit(1)
 	}
-	defer replica.Close()
+	// defer replica.Close()
 	fmt.Println("sending ping")
 	_, err = replica.Write([]byte("*1\r\n$4\r\nPING\r\n"))
 	if err != nil {
