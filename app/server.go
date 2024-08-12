@@ -340,6 +340,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 					ackChannel <- true
 				}
 			} else if args[0].(BulkString).Value == "GETACK" {
+				fmt.Println("got getAck message.........")
 				offset := info["master_repl_offset"]
 				lengthoffset := len(offset)
 				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + strconv.Itoa(lengthoffset) + "\r\n" + offset + "\r\n"
