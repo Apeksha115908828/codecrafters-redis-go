@@ -256,14 +256,14 @@ func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn)
 	getAckCmd := []byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n")
 	acks := 0
 	for _, replica := range replicas {
-		// if count != 3 {
-		fmt.Println("Sending getAck to a replica............replica.offset = ", replica.offset)
-		bytesWritten, _ := replica.conn.Write(getAckCmd);
-		fmt.Println("BytesWritten = ", bytesWritten, "..............")
-		replica.offset = bytesWritten
-		// } else {
-		// 	acks++;
-		// }
+		if replica.offset > 0 {
+			fmt.Println("Sending getAck to a replica............replica.offset = ", replica.offset)
+			bytesWritten, _ := replica.conn.Write(getAckCmd);
+			fmt.Println("BytesWritten = ", bytesWritten, "..............")
+			replica.offset += bytesWritten
+		} else {
+			acks++;
+		}
 	}
 	timer := time.After(time.Duration(timeout) * time.Millisecond)
 	
@@ -398,12 +398,13 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 		case "GET":
 			handleGet(store, conn, args)
 			if info["role"] == "master" {
-					for _, replica := range replicas {
-					_, err := replica.conn.Write([]byte(string(buffer[:n])))
+				for _, replica := range replicas {
+					bytesWritten, err := replica.conn.Write([]byte(string(buffer[:n])))
 					if err != nil {
 						fmt.Print(err)
 					}
 					time.Sleep(time.Millisecond * 20)
+					replica.offset += bytesWritten
 				}
 			}
 			break
@@ -414,7 +415,8 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 				info_string.WriteString(key + ":" + value)
 			}
 			info_string_value := SimpleString(info_string.String()).Encode()
-			_, err := conn.Write([]byte(info_string_value))
+			bytesWritten, err := conn.Write([]byte(info_string_value))
+			// replica.offset += bytesWritten
 			if err != nil {
 				fmt.Println(err, "Write response")
 				// return err
