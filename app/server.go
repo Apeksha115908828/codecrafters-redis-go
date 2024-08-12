@@ -261,7 +261,7 @@ func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn)
 		fmt.Println("Sending getAck to a replica............replica.offset = ", replica.offset)
 		bytesWritten, _ := replica.conn.Write(getAckCmd);
 		fmt.Println("BytesWritten = ", bytesWritten, "..............")
-		replica.offset += bytesWritten
+		// replica.offset += bytesWritten
 		// } else {
 		// acks++;
 		// }
