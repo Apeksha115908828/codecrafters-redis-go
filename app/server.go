@@ -415,7 +415,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 				info_string.WriteString(key + ":" + value)
 			}
 			info_string_value := SimpleString(info_string.String()).Encode()
-			bytesWritten, err := conn.Write([]byte(info_string_value))
+			bytesWritten, err = conn.Write([]byte(info_string_value))
 			// replica.offset += bytesWritten
 			if err != nil {
 				fmt.Println(err, "Write response")
