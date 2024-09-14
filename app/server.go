@@ -3,19 +3,22 @@ package main
 import (
 	"fmt"
 	// Uncomment this block to pass the first stage
+	"errors"
+	"io"
 	"net"
 	"os"
-	"io"
-	"errors"
+
 	// "log"
 	// "bytes"
 	// "bufio"
-	"strconv"
-	"strings" 
-	"time"
 	"encoding/hex"
+	"strconv"
+	"strings"
+	"time"
 )
+
 var ackChannel = make(chan bool)
+
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
 	fmt.Println("Logs from your program will appear here!")
@@ -32,14 +35,14 @@ func main() {
 	info["master_port"] = port
 	info["master_replid"] = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
 	info["master_repl_offset"] = "0"
-	
+
 	replicas := map[int]Replica{}
 	store := NewStore()
 	if len(os.Args) > 4 {
 		fmt.Println("Calling handleReplica....")
 		go handleReplica(store, info)
 	}
-	l, err := net.Listen("tcp", "0.0.0.0:" + port)
+	l, err := net.Listen("tcp", "0.0.0.0:"+port)
 	if err != nil {
 		fmt.Println("Failed to bind to port", port)
 		os.Exit(1)
@@ -51,7 +54,7 @@ func main() {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
-		go handleConn(store, conn, info, replicas);
+		go handleConn(store, conn, info, replicas)
 	}
 	// }
 }
@@ -93,7 +96,7 @@ func handleReplica(store *Storage, info map[string]string) {
 				if len(command) > i+8 {
 					if strings.ToUpper(command[i+6]) == "PX" {
 						expiry, _ = strconv.Atoi(command[i+8])
-					} else {  // case with EX 
+					} else { // case with EX
 						expiry, _ = strconv.Atoi(command[i+8])
 						// expiry = expiry * 1000
 					}
@@ -106,7 +109,7 @@ func handleReplica(store *Storage, info map[string]string) {
 				// value := rdb[command[i+2]]
 				key := command[i+2]
 				i = i + 4
-				val, found := GetFromDataBase(store, key);
+				val, found := GetFromDataBase(store, key)
 				if found {
 					val = SimpleString(val).Encode()
 				}
@@ -115,22 +118,20 @@ func handleReplica(store *Storage, info map[string]string) {
 				replicaOffset = replicaOffset + n
 			} else if len(command) > i && command[i] == "REPLCONF" {
 				fmt.Println("Got Replconf with getack.....................")
-			// case "REPLCONF":
-			// 	if args[0].(BulkString).Value == "ACK" {
-			// 		if info["role"] == "master" {
-			// 			ackChannel <- true
-			// 		}
-			// 	} else if args[0].(BulkString).Value == "GETACK" {
-			// 		offset := info["master_repl_offset"]
-			// 		lengthoffset := len(offset)
-			// 		response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + strconv.Itoa(lengthoffset) + "\r\n" + offset + "\r\n"
-			// 		conn.Write([]byte(response))
-			// 	} else {
-			// 		conn.Write([]byte(SimpleString("OK").Encode()))
-			// 	}
-			// 	break
-
-
+				// case "REPLCONF":
+				// 	if args[0].(BulkString).Value == "ACK" {
+				// 		if info["role"] == "master" {
+				// 			ackChannel <- true
+				// 		}
+				// 	} else if args[0].(BulkString).Value == "GETACK" {
+				// 		offset := info["master_repl_offset"]
+				// 		lengthoffset := len(offset)
+				// 		response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + strconv.Itoa(lengthoffset) + "\r\n" + offset + "\r\n"
+				// 		conn.Write([]byte(response))
+				// 	} else {
+				// 		conn.Write([]byte(SimpleString("OK").Encode()))
+				// 	}
+				// 	break
 
 				offset := strconv.Itoa(replicaOffset)
 				lengthoffset := len(offset)
@@ -145,14 +146,13 @@ func handleReplica(store *Storage, info map[string]string) {
 				// replicaOffset = replicaOffset + n
 				fmt.Print("in else block command =", command)
 			}
-			
+
 		}
 	}
-	fmt.Println("Handle Replica ended ..................................")
 }
 
-func sendHandshake(info map[string]string) (net.Conn){
-	replica, err := net.Dial("tcp", info["master_host"] + ":" + info["master_port"])
+func sendHandshake(info map[string]string) net.Conn {
+	replica, err := net.Dial("tcp", info["master_host"]+":"+info["master_port"])
 	if err != nil {
 		fmt.Println("Error while connecting to the master .....")
 		os.Exit(1)
@@ -204,7 +204,7 @@ func handlePing(conn net.Conn) {
 
 func handleGet(store *Storage, conn net.Conn, args Array) {
 	key := args[0].(BulkString).Value
-	val, found := GetFromDataBase(store, key);
+	val, found := GetFromDataBase(store, key)
 	fmt.Println("Value in get %s", val)
 	value := "$-1\r\n"
 	if found {
@@ -226,11 +226,11 @@ func handleSet(store *Storage, conn net.Conn, args Array) {
 	if len(args) > 3 {
 		if strings.ToUpper(args[2].(BulkString).Value) == "PX" {
 			expiry, _ = strconv.Atoi(args[3].(BulkString).Value)
-		} else {  // case with EX 
+		} else { // case with EX
 			expiry, _ = strconv.Atoi(args[3].(BulkString).Value)
 			// expiry = expiry * 1000
 		}
-		
+
 	}
 	AddToDataBase(store, key, value, expiry)
 	_, err := conn.Write([]byte(SimpleString("OK").Encode()))
@@ -259,7 +259,7 @@ func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn)
 	for _, replica := range replicas {
 		// if replica.offset > 0 || count == 1 {
 		fmt.Println("Sending getAck to a replica............replica.offset = ", replica.offset)
-		bytesWritten, _ := replica.conn.Write(getAckCmd);
+		bytesWritten, _ := replica.conn.Write(getAckCmd)
 		fmt.Println("BytesWritten = ", bytesWritten, "..............")
 		// replica.offset += bytesWritten
 		// } else {
@@ -267,19 +267,19 @@ func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn)
 		// }
 	}
 	timer := time.After(time.Duration(timeout) * time.Millisecond)
-	
-	outer:
-		for acks < count {
-			select {
-			case <-ackChannel:
-				acks++
-				fmt.Printf("Received ack: %d", acks)
-			case <-timer:
-				fmt.Printf("Timed out waiting for acks: %d", acks)
-				break outer
-			}
+
+outer:
+	for acks < count {
+		select {
+		case <-ackChannel:
+			acks++
+			fmt.Printf("Received ack: %d", acks)
+		case <-timer:
+			fmt.Printf("Timed out waiting for acks: %d", acks)
+			break outer
 		}
-		conn.Write([]byte(":" + strconv.Itoa(acks) + "\r\n"))
+	}
+	conn.Write([]byte(":" + strconv.Itoa(acks) + "\r\n"))
 }
 
 func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas map[int]Replica) {
@@ -300,7 +300,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			fmt.Println("Unable to parse the data", string(buffer))
 			os.Exit(1)
 		}
-		command := BulkString {
+		command := BulkString{
 			Value:  "",
 			IsNull: false,
 		}
@@ -314,7 +314,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 				fmt.Println("Command should be a string")
 				os.Exit(1)
 			}
-			
+
 			if len(arr) > 1 {
 				args = arr[1:]
 			}
@@ -331,13 +331,12 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 				command.Value = val
 			}
 		}
-		
-		
+
 		fmt.Println("Processing command = ", command.Value)
 		switch strings.ToUpper(command.Value) {
 		case "PING":
 			fmt.Println("Received Ping from a replica", conn)
-			
+
 			handlePing(conn)
 			break
 		case "REPLCONF":
@@ -356,14 +355,14 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			}
 			break
 		case "PSYNC":
-			
+
 			replicas[len(replicas)] = Replica{
-				conn: conn,
-				offset: 0,
+				conn:      conn,
+				offset:    0,
 				ackOffset: 0,
 			}
 			fmt.Println("came here....................", len(replicas))
-			fmt.Println("sending RDB file to complete synchronization.....",)
+			fmt.Println("sending RDB file to complete synchronization.....")
 			conn.Write([]byte(SimpleString("FULLRESYNC " + info["master_replid"] + " " + info["master_repl_offset"]).Encode()))
 			emptyrdb, err := hex.DecodeString("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2")
 			if err != nil {
@@ -395,7 +394,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 					replica.offset += bytesWritten
 				}
 			}
-			
+
 			break
 		case "GET":
 			handleGet(store, conn, args)
@@ -412,7 +411,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			break
 		case "INFO":
 			var info_string strings.Builder
-			
+
 			for key, value := range info {
 				info_string.WriteString(key + ":" + value)
 			}
