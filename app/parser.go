@@ -1,13 +1,14 @@
 package main
 
 import (
-	"net"
 	"errors"
+	"net"
+
 	// "log"
 	"bytes"
 	// "bufio"
-	"strconv"
 	"fmt"
+	"strconv"
 )
 
 // Reference: https://redis-doc-test.readthedocs.io/en/latest/topics/protocol/#:~:text=RESP%20protocol%20description,-The%20RESP%20protocol&text=This%20is%20the%20protocol%20you,Integers%2C%20Bulk%20Strings%20and%20Arrays.
@@ -15,6 +16,7 @@ import (
 const (
 	CLRF = "\r\n"
 )
+
 type Array []interface{}
 type BulkString struct {
 	Value  string
@@ -24,16 +26,16 @@ type SimpleString string
 type Integer int
 
 type Replica struct {
-	conn net.Conn
-	offset int
+	conn      net.Conn
+	offset    int
 	ackOffset int
 }
 
 func Parse(data []byte) (interface{}, []byte, error) {
 	dataType := data[0]
 	var (
-		parsed	interface{}
-		err		error
+		parsed interface{}
+		err    error
 	)
 	switch dataType {
 	case '*':
@@ -50,7 +52,7 @@ func Parse(data []byte) (interface{}, []byte, error) {
 	}
 
 	if err != nil {
-		return nil, data, fmt.Errorf("Error while parsing data", err)
+		return nil, data, fmt.Errorf("error while parsing data %s", err)
 	}
 	return parsed, data, err
 }
@@ -94,17 +96,17 @@ func ParseString(data []byte) (string, []byte, error) {
 }
 
 func ParseBulkString(data []byte) (BulkString, []byte, error) {
-	bulkString := BulkString {
+	bulkString := BulkString{
 		Value:  "",
 		IsNull: false,
 	}
 	if len(data) < 6 {
-		return bulkString, data, errors.New("String needs at least 6 chracters")
+		return bulkString, data, errors.New("string needs at least 6 chracters")
 	}
 	data = data[1:]
 	stringData := bytes.SplitN(data, []byte(CLRF), 2)
 	if len(stringData) != 2 {
-		return bulkString, data, errors.New("String needs a delimiter")
+		return bulkString, data, errors.New("string needs a delimiter")
 	}
 	data = stringData[1]
 	length, err := strconv.Atoi(string(stringData[0]))
@@ -117,7 +119,7 @@ func ParseBulkString(data []byte) (BulkString, []byte, error) {
 	}
 	stringData = bytes.SplitN(data, []byte(CLRF), 2)
 	if len(stringData) != 2 {
-		return bulkString, data, errors.New("String needs a delimiter")
+		return bulkString, data, errors.New("string needs a delimiter")
 	}
 	data = stringData[1]
 	bulkString.Value = string(stringData[0])
@@ -142,7 +144,7 @@ func ParseArray(data []byte) (Array, []byte, error) {
 		return nil, data, fmt.Errorf("length is not an integer: %s", arraydata[0])
 	}
 	array := Array{}
-	for i := 0; i<length; i++ {
+	for i := 0; i < length; i++ {
 		arrayItem, dataLeft, err := Parse(data)
 		if err != nil {
 			return nil, data, fmt.Errorf("failed to parse array item: %s, due to %w", data, err)

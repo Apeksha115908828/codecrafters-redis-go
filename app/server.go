@@ -42,13 +42,13 @@ func main() {
 		fmt.Println("Calling handleReplica....")
 		go handleReplica(store, info)
 	}
-	l, err := net.Listen("tcp", "0.0.0.0:"+port)
+	listener, err := net.Listen("tcp", "0.0.0.0:"+port)
 	if err != nil {
 		fmt.Println("Failed to bind to port", port)
 		os.Exit(1)
 	}
 	for {
-		conn, err := l.Accept()
+		conn, err := listener.Accept()
 		fmt.Println("Received a connection request.......")
 		if err != nil {
 			fmt.Println("Error accepting connection: ", err.Error())
@@ -152,6 +152,7 @@ func handleReplica(store *Storage, info map[string]string) {
 }
 
 func sendHandshake(info map[string]string) net.Conn {
+	// from replica.......
 	replica, err := net.Dial("tcp", info["master_host"]+":"+info["master_port"])
 	if err != nil {
 		fmt.Println("Error while connecting to the master .....")
@@ -205,13 +206,13 @@ func handlePing(conn net.Conn) {
 func handleGet(store *Storage, conn net.Conn, args Array) {
 	key := args[0].(BulkString).Value
 	val, found := GetFromDataBase(store, key)
-	fmt.Println("Value in get %s", val)
+	fmt.Printf("Value in get %s", val)
 	value := "$-1\r\n"
 	if found {
 		value = SimpleString(val).Encode()
 	}
 	// value := found ? SimpleString(val).Encode() : SimpleString("").Encode()
-	fmt.Println("Value in get %s", value)
+	fmt.Printf("Value in get %s", value)
 	_, err := conn.Write([]byte(value))
 	if err != nil {
 		fmt.Println("Error while writing", err)
@@ -301,8 +302,8 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			os.Exit(1)
 		}
 		command := BulkString{
-			Value:  "",
-			IsNull: false,
+			Value: "",
+			// IsNull: false,
 		}
 		args := Array{}
 		arr, ok := parsedData.(Array)
@@ -338,7 +339,6 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			fmt.Println("Received Ping from a replica", conn)
 
 			handlePing(conn)
-			break
 		case "REPLCONF":
 			if args[0].(BulkString).Value == "ACK" {
 				if info["role"] == "master" {
@@ -353,7 +353,6 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			} else {
 				conn.Write([]byte(SimpleString("OK").Encode()))
 			}
-			break
 		case "PSYNC":
 
 			replicas[len(replicas)] = Replica{
@@ -375,10 +374,8 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 			conn.Write([]byte("$" + strconv.Itoa(len(emptyrdb)) + "\r\n" + string(emptyrdb)))
 			// time.Sleep(1 * time.Second)
 			// conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n"))
-			break
 		case "ECHO":
 			handleEcho(conn, args)
-			break
 		case "SET":
 			handleSet(store, conn, args)
 			fmt.Println("Set called on current server", string(buffer[:n]))
@@ -394,8 +391,6 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 					replica.offset += bytesWritten
 				}
 			}
-
-			break
 		case "GET":
 			handleGet(store, conn, args)
 			if info["role"] == "master" {
@@ -408,7 +403,6 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 					replica.offset += bytesWritten
 				}
 			}
-			break
 		case "INFO":
 			var info_string strings.Builder
 
