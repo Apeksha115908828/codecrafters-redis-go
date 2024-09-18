@@ -254,34 +254,34 @@ func handleEcho(conn net.Conn, args Array) {
 	}
 }
 
-// func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn) {
-// 	getAckCmd := []byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n")
-// 	acks := 0
-// 	for _, replica := range replicas {
-// 		// if replica.offset > 0 || count == 1 {
-// 		fmt.Println("Sending getAck to a replica............replica.offset = ", replica.offset)
-// 		bytesWritten, _ := replica.conn.Write(getAckCmd)
-// 		fmt.Println("BytesWritten = ", bytesWritten, "..............")
-// 		// replica.offset += bytesWritten
-// 		// } else {
-// 		// acks++;
-// 		// }
-// 	}
-// 	timer := time.After(time.Duration(timeout) * time.Millisecond)
+func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn) {
+	getAckCmd := []byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n")
+	acks := 0
+	for _, replica := range replicas {
+		// if replica.offset > 0 || count == 1 {
+		fmt.Println("Sending getAck to a replica............replica.offset = ", replica.offset)
+		bytesWritten, _ := replica.conn.Write(getAckCmd)
+		fmt.Println("BytesWritten = ", bytesWritten, "..............")
+		// replica.offset += bytesWritten
+		// } else {
+		// acks++;
+		// }
+	}
+	timer := time.After(time.Duration(timeout) * time.Millisecond)
 
-// outer:
-// 	for acks < count {
-// 		select {
-// 		case <-ackChannel:
-// 			acks++
-// 			fmt.Printf("Received ack: %d", acks)
-// 		case <-timer:
-// 			fmt.Printf("Timed out waiting for acks: %d", acks)
-// 			break outer
-// 		}
-// 	}
-// 	conn.Write([]byte(":" + strconv.Itoa(acks) + "\r\n"))
-// }
+outer:
+	for acks < count {
+		select {
+		case <-ackChannel:
+			acks++
+			fmt.Printf("Received ack: %d", acks)
+		case <-timer:
+			fmt.Printf("Timed out waiting for acks: %d", acks)
+			break outer
+		}
+	}
+	conn.Write([]byte(":" + strconv.Itoa(acks) + "\r\n"))
+}
 
 // func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn) {
 // 	getAckCmd := []byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n")
@@ -341,66 +341,66 @@ func handleEcho(conn net.Conn, args Array) {
 // 	}
 // }
 
-func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn) {
-	getAckCmd := []byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n")
-	acks := 0
-	ch := make(chan bool)
+// func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn) {
+// 	getAckCmd := []byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n")
+// 	acks := 0
+// 	ch := make(chan bool)
 
-	// Temporarily increase timeout to allow more time for ACKs to arrive
-	extendedTimeout := 2000 // 2000ms or 2 seconds
+// 	// Temporarily increase timeout to allow more time for ACKs to arrive
+// 	extendedTimeout := 2000 // 2000ms or 2 seconds
 
-	for _, replica := range replicas {
-		go func(replica Replica) {
-			fmt.Println("Sending getAck to replica............replica.offset =", replica.offset)
-			bytesWritten, err := replica.conn.Write(getAckCmd)
-			fmt.Println("BytesWritten =", bytesWritten)
-			if err != nil {
-				fmt.Println("Error sending GETACK:", err)
-				ch <- false
-				return
-			}
+// 	for _, replica := range replicas {
+// 		go func(replica Replica) {
+// 			fmt.Println("Sending getAck to replica............replica.offset =", replica.offset)
+// 			bytesWritten, err := replica.conn.Write(getAckCmd)
+// 			fmt.Println("BytesWritten =", bytesWritten)
+// 			if err != nil {
+// 				fmt.Println("Error sending GETACK:", err)
+// 				ch <- false
+// 				return
+// 			}
 
-			// Listen for ACK response
-			buffer := make([]byte, 1024)
-			n, err := replica.conn.Read(buffer)
-			if err != nil {
-				fmt.Println("Error reading ACK from replica:", err)
-				ch <- false
-				return
-			}
+// 			// Listen for ACK response
+// 			buffer := make([]byte, 1024)
+// 			n, err := replica.conn.Read(buffer)
+// 			if err != nil {
+// 				fmt.Println("Error reading ACK from replica:", err)
+// 				ch <- false
+// 				return
+// 			}
 
-			// Parse response to check if it's an ACK
-			response := string(buffer[:n])
-			if strings.Contains(response, "REPLCONF ACK") {
-				fmt.Println("Received ACK from replica")
-				replica.offset += bytesWritten
-				ch <- true
-			} else {
-				fmt.Println("Did not receive ACK from replica")
-				ch <- false
-			}
-		}(replica)
-	}
+// 			// Parse response to check if it's an ACK
+// 			response := string(buffer[:n])
+// 			if strings.Contains(response, "REPLCONF ACK") {
+// 				fmt.Println("Received ACK from replica")
+// 				replica.offset += bytesWritten
+// 				ch <- true
+// 			} else {
+// 				fmt.Println("Did not receive ACK from replica")
+// 				ch <- false
+// 			}
+// 		}(replica)
+// 	}
 
-	// Wait for ACKs or timeout
-	timer := time.After(time.Duration(extendedTimeout) * time.Millisecond) // Using extended timeout
-	for i := 0; i < len(replicas); i++ {
-		select {
-		case ack := <-ch:
-			if ack {
-				acks++
-			}
-			if acks >= count {
-				conn.Write([]byte(fmt.Sprintf(":%d\r\n", acks)))
-				return
-			}
-		case <-timer:
-			fmt.Println("Timeout reached, acks received:", acks)
-			conn.Write([]byte(fmt.Sprintf(":%d\r\n", acks)))
-			return
-		}
-	}
-}
+// 	// Wait for ACKs or timeout
+// 	timer := time.After(time.Duration(extendedTimeout) * time.Millisecond) // Using extended timeout
+// 	for i := 0; i < len(replicas); i++ {
+// 		select {
+// 		case ack := <-ch:
+// 			if ack {
+// 				acks++
+// 			}
+// 			if acks >= count {
+// 				conn.Write([]byte(fmt.Sprintf(":%d\r\n", acks)))
+// 				return
+// 			}
+// 		case <-timer:
+// 			fmt.Println("Timeout reached, acks received:", acks)
+// 			conn.Write([]byte(fmt.Sprintf(":%d\r\n", acks)))
+// 			return
+// 		}
+// 	}
+// }
 
 func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas map[int]Replica) {
 	defer conn.Close()
