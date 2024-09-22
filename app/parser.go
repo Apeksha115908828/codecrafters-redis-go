@@ -123,9 +123,6 @@ func ParseBulkString(data []byte) (BulkString, []byte, error) {
 	}
 	data = stringData[1]
 	bulkString.Value = string(stringData[0])
-	if err != nil {
-		return bulkString, data, fmt.Errorf("str is formed properly %s", stringData[0])
-	}
 	return bulkString, data, nil
 }
 
