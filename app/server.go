@@ -258,7 +258,7 @@ func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn)
 	getAckCmd := []byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n")
 	acks := 0
 	for _, replica := range replicas {
-		if replica.offset > 0 || count == 1 {
+		if replica.offset > 0 || count == 1 || acks > count {
 			fmt.Println("Sending getAck to a replica............replica.offset = ", replica.offset)
 			bytesWritten, _ := replica.conn.Write(getAckCmd)
 			fmt.Println("BytesWritten = ", bytesWritten, "..............")
