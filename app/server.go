@@ -263,6 +263,7 @@ func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn)
 			bytesWritten, _ := replica.conn.Write(getAckCmd)
 			fmt.Println("BytesWritten = ", bytesWritten, "..............")
 			replica.offset += bytesWritten
+			break
 		} else {
 			acks++
 		}
