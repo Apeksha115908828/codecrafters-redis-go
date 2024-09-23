@@ -345,6 +345,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 
 			handlePing(conn)
 		case "REPLCONF":
+			fmt.Println("REPLCONF.........", args[0].(BulkString).Value)
 			if args[0].(BulkString).Value == "ACK" {
 				if info["role"] == "master" {
 					ackChannel <- true
