@@ -265,7 +265,7 @@ func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn)
 		replica.offset += bytesWritten
 		// break
 		// } else {
-		// 	acks++
+		acks++
 		// }
 	}
 	timer := time.After(time.Duration(timeout) * time.Millisecond)
