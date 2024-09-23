@@ -354,6 +354,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 				lengthoffset := len(offset)
 				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + strconv.Itoa(lengthoffset) + "\r\n" + offset + "\r\n"
 				conn.Write([]byte(response))
+				ackChannel <- true
 			} else {
 				conn.Write([]byte(SimpleString("OK").Encode()))
 			}
