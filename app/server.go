@@ -137,11 +137,12 @@ func handleReplica(store *Storage, info map[string]string) {
 				lengthoffset := len(offset)
 				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + strconv.Itoa(lengthoffset) + "\r\n" + offset + "\r\n"
 				conn.Write([]byte(response))
-				i = i + 4
+				i = i + 2
 				replicaOffset = replicaOffset + n
 				fmt.Println("replicaOffset = ", replicaOffset, "............................")
 			} else if len(command) > i && command[i] == "PING" {
 				replicaOffset = replicaOffset + n
+				i = i + 2
 			} else {
 				// replicaOffset = replicaOffset + n
 				fmt.Print("in else block command =", command)
