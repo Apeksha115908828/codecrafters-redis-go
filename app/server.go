@@ -276,6 +276,9 @@ outer:
 		case <-ackChannel:
 			acks++
 			fmt.Printf("Received ack: %d", acks)
+			if acks == count {
+				break outer
+			}
 		case <-timer:
 			fmt.Printf("Timed out waiting for acks: %d", acks)
 			break outer
