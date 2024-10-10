@@ -368,7 +368,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 				offset:    0,
 				ackOffset: 0,
 			}
-			fmt.Println("came here....................", len(replicas), replicas[len(replicas)-1].conn)
+			fmt.Println("came here....................", len(replicas), replicas[len(replicas)-1].conn, replicas[len(replicas)-1].conn.LocalAddr().String())
 			fmt.Println("sending RDB file to complete synchronization.....")
 			conn.Write([]byte(SimpleString("FULLRESYNC " + info["master_replid"] + " " + info["master_repl_offset"]).Encode()))
 			emptyrdb, err := hex.DecodeString("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2")
