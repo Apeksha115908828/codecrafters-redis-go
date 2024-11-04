@@ -17,8 +17,6 @@ import (
 	"time"
 )
 
-var ackChannel = make(chan bool)
-
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
 	fmt.Println("Logs from your program will appear here!")
@@ -133,7 +131,7 @@ func handleReplica(store *Storage, info map[string]string) {
 				// 		conn.Write([]byte(SimpleString("OK").Encode()))
 				// 	}
 				// 	break
-				ackChannel <- true
+				// ackChannel <- true
 				offset := strconv.Itoa(replicaOffset)
 				lengthoffset := len(offset)
 				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + strconv.Itoa(lengthoffset) + "\r\n" + offset + "\r\n"
@@ -259,8 +257,8 @@ func handleEcho(conn net.Conn, args Array) {
 func handleWait(count int, timeout int, replicas map[int]Replica, conn net.Conn) {
 	getAckCmd := []byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n")
 	acks := 0
+	var ackChannel = make(chan bool)
 	for _, replica := range replicas {
-		// if replica.offset > 0 || count == 1 || acks > count {
 		fmt.Println("Sending getAck to a replica............replica.offset = ", replica.offset, "conn.LocalAddr().String() = ", replica.conn.LocalAddr().String(), replica.conn.LocalAddr().Network())
 		bytesWritten, _ := replica.conn.Write(getAckCmd)
 		fmt.Println("BytesWritten = ", bytesWritten, "..............")
@@ -368,7 +366,7 @@ func handleConn(store *Storage, conn net.Conn, info map[string]string, replicas 
 				offset:    0,
 				ackOffset: 0,
 			}
-			fmt.Println("came here....................", len(replicas), replicas[len(replicas)-1].conn, replicas[len(replicas)-1].conn.LocalAddr().String())
+			fmt.Println("came here....................", len(replicas), replicas[len(replicas)-1].conn, replicas[len(replicas)-1].conn.RemoteAddr().String())
 			fmt.Println("sending RDB file to complete synchronization.....")
 			conn.Write([]byte(SimpleString("FULLRESYNC " + info["master_replid"] + " " + info["master_repl_offset"]).Encode()))
 			emptyrdb, err := hex.DecodeString("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2")
