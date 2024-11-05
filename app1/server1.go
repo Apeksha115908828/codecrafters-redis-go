@@ -366,6 +366,25 @@ func (server *Server) handleWait(request []string) (error) {
 	return nil
 }
 
+func (server *Server) handleConfig(request []string) error {
+	switch(strings.ToUpper(request[0])) {
+	case "GET":
+		query := request[1]
+		if query == "dir" {
+			_, err := server.conn.conn.Write([]byte("*2\r\n" + EncodeBulkString("dir") + EncodeBulkString(server.opts.Dir)))
+			if err != nil {
+				return fmt.Errorf("config handling failed with %v", err)
+			}
+		} else if query == "dbfilename" {
+			_, err := server.conn.conn.Write([]byte("*2\r\n" + EncodeBulkString("dbfilename") + EncodeBulkString(server.opts.DbFileName)))
+			if err != nil {
+				return fmt.Errorf("config handling failed with %v", err)
+			}
+		}
+	}
+	return nil
+}
+
 func (server *Server) handle() {
 	defer server.conn.conn.Close()
 
@@ -438,7 +457,13 @@ func (server *Server) handle() {
 			waitLock.Lock()
 			err = server.handleWait(request[1:])
 			waitLock.Unlock()
-		case "DEFAULT":
+		case "CONFIG":
+			if len(request) != 3 {
+				fmt.Println("Ill formed command", request[0])
+				return
+			}
+			err = server.handleConfig(request[1:])
+		default:
 			//handle default
 		}
 		if err != nil {
