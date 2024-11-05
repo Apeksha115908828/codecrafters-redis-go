@@ -23,12 +23,12 @@ type Opts struct {
 func (options *Opts) Config() {
 	options.Role = "master"
 	options.ReplicaId = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb" // can write a function generate random replica id
-
+	master := strings.Split(options.ReplicaOf, " ")
 	if options.ReplicaOf != "" {
 		options.Role = "slave"
 		options.ReplicaId = ""
-		options.MasterHost = strings.Split(options.ReplicaOf, " ")[0]
-		options.MasterPort = strings.Split(options.ReplicaOf, " ")[0]
+		options.MasterHost = master[0]
+		options.MasterPort = master[1]
 	}
 }
 
@@ -80,6 +80,7 @@ func (slaves *Slaves) HandleAck(addr net.Addr, ack int) error {
 		return fmt.Errorf("Slave retrieval failed for %s", addr.String())
 	}
 	slave.offset = ack
+	fmt.Println("Setting offset of", slave, " to ack = ", ack)
 	return nil
 }
 
@@ -89,12 +90,12 @@ func (slaves *Slaves) Count() int {
 
 	return len(slaves.list)
 }
-
+var storage = NewStore()
 func NewMaster(conn *Connection, opts Opts, mc *MasterConfig) *Server {
 	return &Server{
 		conn: conn,
 		opts: opts,
-		storage: NewStore(), //TODO: what to put here??
+		storage: storage, //TODO: what to put here??
 		
 		mc: mc,
 	}
@@ -104,6 +105,6 @@ func NewReplica(conn *Connection, opts Opts) *Server {
 	return &Server{
 		conn: conn,
 		opts: opts,
-		storage: NewStore(), //TODO: what to put here??
+		storage: storage, //TODO: what to put here??
 	}
 }

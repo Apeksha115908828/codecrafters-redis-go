@@ -15,7 +15,7 @@ import (
 	// "errors"
 	"strings"
 	"encoding/hex"
-
+	"errors"
 	"sync"
 	// "log"
 	// "bytes"
@@ -29,15 +29,17 @@ func main() {
 	var opts Opts
 	_, err := flags.Parse(&opts)
 	if err != nil {
+		fmt.Println("Error parsing flags %v", err)
 		os.Exit(1)
 	}
 
 	opts.Config()
 	if opts.Role != "master" {
+		fmt.Println("Connecting with master....")
 		go handleReplica(opts)
-		if err != nil {
-			os.Exit(1)
-		}
+		// if err != nil {
+		// 	os.Exit(1)
+		// }
 	}
 	handleMaster(opts)
 }
@@ -64,8 +66,7 @@ func handleMaster(opts Opts) {
 			reader: bufio.NewReader(conn),
 			offset: 0,
 		}
-		
-		
+
 		server := NewMaster(connection, opts, masterConf)
 		go server.handle()
 	}
@@ -74,6 +75,7 @@ func handleMaster(opts Opts) {
 func handleReplica(opts Opts) {
 	conn, err := net.Dial("tcp", opts.MasterHost+":"+opts.MasterPort)
 	if err != nil {
+		fmt.Println("Error connecting to the master....", err, " ", opts.MasterPort)
 		os.Exit(1)
 	}
 
@@ -88,22 +90,22 @@ func handleReplica(opts Opts) {
 
 	//handle
 	server.handle()
-	// if err != nil {
-	// 	fmt.Println("%v", err)
-	// 	os.Exit(1)
-	// }
 }
 
 func (conn *Connection) Read() (int, []string, error) {
 	var offset int
 	numBytes, numElements, err := conn.readLine()
+	if errors.Is(err, io.EOF) {
+		fmt.Println("Got EOF error", numBytes, " ", numElements)
+		return 0, nil, io.EOF
+	}
 	if err != nil {
-		return 0, nil, fmt.Errorf("readLine failed with error %v", err)
+		return 0, nil, fmt.Errorf("readLine failed with error %v\n", err)
 	}
 	offset += numBytes
 
 	if numElements[0] != '*' {
-		return 0, nil, fmt.Errorf("Failute due to array format * not found")
+		return 0, nil, fmt.Errorf("Failure due to array format * not found")
 	}
 
 	len, err := strconv.Atoi(numElements[1:])
@@ -147,7 +149,8 @@ func (server *Server) handlePing() (error) {
 		}
 		return nil
 	}
-	return fmt.Errorf("PING received on non master node")
+	return nil
+	// return fmt.Errorf("PING received on non master node")
 }
 
 func EncodeBulkString(str string) string {
@@ -185,7 +188,8 @@ func (server *Server) handlePsync(request []string) (error) {
 	}
 	if request[0] == "?" {
 		// initially the offset will be zero
-		_, err =server.conn.conn.Write([]byte(EncodeBulkString(string("FULLRESYNC " + server.opts.ReplicaId + " " + strconv.Itoa(server.mc.propOffset)))))
+		// _, err =server.conn.conn.Write([]byte(EncodeBulkString(string("FULLRESYNC " + server.opts.ReplicaId + " " + strconv.Itoa(server.mc.propOffset)))))
+		_, err = server.conn.conn.Write([]byte(string("+FULLRESYNC " + server.opts.ReplicaId + " 0\r\n")))
 		if err != nil {
 			return fmt.Errorf("Write to connection failed with %v", err)
 		}
@@ -202,7 +206,8 @@ func (server *Server) handlePsync(request []string) (error) {
 }
 
 func (server *Server) handleReplconf(request []string) (error) {
-	switch request[0] {
+	fmt.Println("got handleReplconf......")
+	switch strings.ToUpper(request[0]) {
 	case "ACK":
 		// For the master
 		ack, err := strconv.Atoi(request[1])
@@ -220,6 +225,7 @@ func (server *Server) handleReplconf(request []string) (error) {
 	case "GETACK":
 		// For the slaves
 		offset := server.conn.offset
+		fmt.Println("Responding to the getAck command......")
 		response := fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%d\r\n", len(strconv.Itoa(offset)), offset)
 		_, err := server.conn.conn.Write([]byte(response))
 		if err != nil {
@@ -241,7 +247,7 @@ func (server *Server) handleGet(request []string) (error) {
 	if err != nil {
 		response = "$-1\r\n"
 	} else {
-		response = EncodeBulkString(value)
+		response = EncodeBulkString(*value)
 	}
 	_, err = server.conn.conn.Write([]byte(response))
 	if err != nil {
@@ -266,9 +272,9 @@ func (server *Server) handleSet(request []string) (error) {
 	key := request[0]
 	value := request[1]
 	var expiry time.Time
-	if(len(request) == 4) {
+	if len(request) == 4 {
 		val, _ := strconv.Atoi(request[3])
-		if(request[2] == "PX") {
+		if strings.ToUpper(request[2]) == "PX" {
 			expiry = time.Now().Add(time.Duration(val) * time.Millisecond)
 		} else { //EX
 			expiry = time.Now().Add(time.Duration(val) * time.Second)
@@ -369,35 +375,38 @@ func (server *Server) handle() {
 			fmt.Printf("Read failed with %v", err)
 			return
 		}
+		fmt.Println("Offset here", server.conn.conn.RemoteAddr(), " offset = ", offset)
 		//handle the requests here....
 
 		switch strings.ToUpper(request[0]) {
 		case "PING":
 			err = server.handlePing()
+			offset = 14
 		case "REPLCONF":
+			fmt.Println("got REPLCONF......")
 			if len(request) < 2 {
 				fmt.Println("Ill formed command REPLCONF")
-				os.Exit(1)
+				return
 			}
 			err = server.handleReplconf(request[1:])
 			//handle replconf
 		case "PSYNC":
 			if len(request) != 3 {
 				fmt.Println("Ill formed command PSYNC")
-				os.Exit(1)
+				return
 			}
 			err = server.handlePsync(request[1:])
 			//handle psync
 		case "ECHO":
 			if len(request) != 2 {
 				fmt.Println("%s expects at least 1 argument", request[0]) 
-				os.Exit(1)
+				return
 			}
 			err = server.handleEcho(request[1])
 		case "SET":
 			if len(request) < 2 {
 				fmt.Println("Ill formed command SET")
-				os.Exit(1)
+				return
 			}
 			err = server.handleSet(request[1:])
 			fmt.Println("Handled Set on master........")
@@ -415,13 +424,13 @@ func (server *Server) handle() {
 		case "GET":
 			if len(request) != 2 {
 				fmt.Println("Ill formed command GET")
-				os.Exit(1)
+				return
 			}
 			err = server.handleGet(request[1:])
 		case "INFO":
 			if len(request) != 2 {
 				fmt.Println("%s expects at least 1 argument", request[0]) 
-				os.Exit(1)
+				return
 			}
 			err = server.handleInfo(request[1])
 		case "WAIT":
@@ -434,7 +443,7 @@ func (server *Server) handle() {
 		}
 		if err != nil {
 			fmt.Println("command %s failed %v", request[0], err)
-			os.Exit(1)
+			return
 		}
 
 		if server.opts.Role != "master" && (len(request) <= 1 || request[1] != "GETACK") {
@@ -444,7 +453,11 @@ func (server *Server) handle() {
 }
 
 func (conn *Connection) readLine() (int, string, error) {
+	// str, err := conn.reader.ReadString('\n')
+	// str1, _, err := conn.reader.ReadLine()
+	// str := string(str1)
 	str, err := conn.reader.ReadString('\n')
+	fmt.Println("ReadLine string: ", str)
 	bytesRead := len(str)
 	if len(str) > 0 {
 		//removing /r/n from the end
@@ -452,7 +465,7 @@ func (conn *Connection) readLine() (int, string, error) {
 			str = str[:len(str) - 1]
 		}
 
-		if(str[len(str) - 1] == '\r') {
+		if str[len(str) - 1] == '\r' {
 			str = str[:len(str) - 1]
 		}
 	}
@@ -480,23 +493,6 @@ func (server *Server) sendHandshake(opts Opts) error {
 	}
 
 	_, err = server.conn.conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n"))
-	if err != nil {
-		fmt.Println("Error while connecting to the master %v", err)
-		os.Exit(1)
-	}
-
-	_, response, err =server.conn.readLine()
-	if err != nil {
-		return fmt.Errorf("reading from connection failed %v", err)
-	}
-
-	if response != "+OK" {
-		return fmt.Errorf("didn't receive \"OK\", instead received %s", response);
-	}
-
-	fmt.Println("sending first replconf")
-
-	_, err =server.conn.conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n"))
 	if err != nil {
 		fmt.Println("Error while connecting to the master %v", err)
 		os.Exit(1)
