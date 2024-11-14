@@ -656,7 +656,7 @@ func (server *Server) handle() {
 		err := server.loadRdb()
 		if err != nil {
 			fmt.Printf("Error occurred while reading form RDB file %v", err)
-			return
+			// return
 		}
 	}
 	for {
