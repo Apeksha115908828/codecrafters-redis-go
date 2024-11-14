@@ -47,9 +47,22 @@ func (store *Storage) GetFromDataBase(key string) (*string, error) {
 
 // func AddToDataBase(store *Storage, args Array) {
 func (store *Storage) AddToDataBase(key string, value string, expiryVal time.Time) {
-	store.db[key] = &DataEntry{
-		value:  value,
-		expiry: expiryVal,
+	_, err := store.GetFromDataBase(key)
+	if err != nil {
+		store.db[key] = &DataEntry{
+			value:  value,
+			expiry: expiryVal,
+		}
+	} else {
+		entry, ok := store.db[key]
+		if !ok {
+			fmt.Println("Something happened while fetching existing entry")
+			return
+		}
+		store.db[key] = &DataEntry{
+			value:  value,
+			expiry: entry.expiry,
+		}
 	}
 	fmt.Println("AddtoDatabase storing data", store.db[key].value)
 	fmt.Println("In set function size of the store: ", len(store.db))

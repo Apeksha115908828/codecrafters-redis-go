@@ -415,6 +415,29 @@ func (server *Server) handleKeys(key string) error {
 	}
 }
 
+func (server *Server) handleIncr(key string) error {
+	fmt.Println("HandleIncr called for key = ", key)
+	var value string = ""
+	val, err := server.storage.GetFromDataBase(key)
+	if err != nil {
+		fmt.Println("Error getting value from store", value)
+		// server.storage.AddToDataBase(key, string(1), time.Time{})
+		value = "0"
+
+	} else {
+		value = *val
+	}
+	valueint, err := strconv.Atoi(value)
+	if err != nil {
+		return fmt.Errorf("error while converting the value to string")
+	}
+	valueint += 1
+	server.storage.AddToDataBase(key, string(valueint), time.Time{})
+	server.conn.conn.Write([]byte(":" + strconv.Itoa(valueint) + "\r\n"))
+
+	return nil
+}
+
 const (
 	dbStartKey         byte = 0xFE
 	metadataStartKey   byte = 0xFA
@@ -749,7 +772,11 @@ func (server *Server) handle() {
 				fmt.Printf("%s Command expects an argument\n", request[0])
 			}
 			err = server.handleKeys(request[1])
-
+		case "INCR":
+			if len(request) != 2 {
+				fmt.Printf("%s Command expects an argument\n", request[0])
+			}
+			err = server.handleIncr(request[1])
 		default:
 			//handle default
 		}
