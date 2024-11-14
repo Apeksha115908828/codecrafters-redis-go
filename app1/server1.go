@@ -539,6 +539,7 @@ SkipToDB:
 	// read the Database now
 	var expiryVal time.Time
 	for {
+		fmt.Println("Before reading next byte expiryVal = ", expiryVal)
 		rbyte, err := reader.ReadByte()
 		if err != nil {
 			return fmt.Errorf("failed reading the database section bytes from the file %v", err)
@@ -567,21 +568,27 @@ SkipToDB:
 			}
 			fmt.Printf("Expiry Hash Table size: = %d\n", expiryTableSize)
 		case hasExpiryInSecKey:
-			var expiryBytes []byte
+			expiryBytes := make([]byte, 4)
+			// expiryBytes, err := reader.ReadBytes(4)
 			_, err := reader.Read(expiryBytes)
 			if err != nil {
-				return fmt.Errorf("error reading the expiry value%v ", err)
+				return fmt.Errorf("error reading the expiry value in sec%v ", err)
 			}
-			expiryBytesVal := int64(binary.LittleEndian.Uint32(expiryBytes)) * 1000
-			expiryVal = time.Now().Add(time.Duration(expiryBytesVal) * time.Second)
+			expiryBytesVal := int64(binary.LittleEndian.Uint32(expiryBytes))
+			// expiryVal = time.Now().Add(time.Duration(expiryBytesVal) * time.Second)
+			expiryVal = time.Unix(expiryBytesVal, 0)
+			fmt.Println("Read the expiry val as ", expiryVal)
 		case hasExpiryInMSecKey:
-			var expiryBytes []byte
+			expiryBytes := make([]byte, 8)
 			_, err := reader.Read(expiryBytes)
+			// expiryBytes, err := reader.ReadBytes(8)
 			if err != nil {
-				return fmt.Errorf("error reading the expiry value%v ", err)
+				return fmt.Errorf("error reading the expiry value in msec %v ", err)
 			}
-			expiryBytesVal := int64(binary.LittleEndian.Uint32(expiryBytes)) * 1000
-			expiryVal = time.Now().Add(time.Duration(expiryBytesVal) * time.Millisecond)
+			expiryBytesVal := int64(binary.LittleEndian.Uint64(expiryBytes))
+			// expiryVal = time.Now().Add(time.Duration(expiryBytesVal) * time.Millisecond)
+			expiryVal = time.Unix(expiryBytesVal/1000, 0)
+			fmt.Println("Read the expiry val as ms converted to time", expiryVal)
 		case metadataStartKey:
 			fmt.Println("encountered metadata start")
 			continue
@@ -591,6 +598,8 @@ SkipToDB:
 			return nil
 		default:
 			// below is assuming the type flag was 00 => string
+			// _, err := reader.ReadByte()
+			// keyByte, err = reader.ReadByte()
 			keyByte, err := reader.ReadByte()
 			if err != nil {
 				return fmt.Errorf("error reading key %v\n ", err)
@@ -613,10 +622,11 @@ SkipToDB:
 			fmt.Println("reading the value", value)
 			if expiryVal.IsZero() || !time.Now().After(expiryVal) {
 				//skip adding already expired keys, this is possible as we are reading from the rdb file
-				fmt.Print("Adding to DB....")
+				fmt.Print("Adding to DB....\n", expiryVal)
+				fmt.Print(" expiryVal.IsZero()", expiryVal.IsZero())
 				server.storage.AddToDataBase(key, value, expiryVal)
 			}
-			expiryVal = time.Time{}
+			// expiryVal = time.Time{}
 		}
 	}
 	// return nil
