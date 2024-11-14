@@ -402,11 +402,13 @@ func (server *Server) handleKeys(key string) error {
 		if err != nil {
 			return fmt.Errorf("error getting keys: %v", err)
 		}
+		fmt.Printf("number of keys = %d", len(keys))
 		outputstring := ""
 		for key_i := range len(keys) {
 			outputstring += EncodeBulkString(keys[key_i])
 		}
-		_, err = server.conn.conn.Write([]byte("*" + string(len(keys)) + "\r\n" + outputstring))
+		// _, err = server.conn.conn.Write([]byte("*" + string(len(keys)) + "\r\n" + outputstring))
+		_, err = server.conn.conn.Write([]byte(ToRespArray(keys)))
 		return err
 	} else {
 		return fmt.Errorf("command %s not supported", key)
@@ -439,6 +441,7 @@ func parseLength(length byte, reader *bufio.Reader) (int, error) {
 	case 0b01:
 		len = int(length & 0b00111111)
 		nextbyte, err := reader.ReadByte()
+		fmt.Println("reading one more byte")
 		if err != nil {
 			return 0, fmt.Errorf("error reading the next byte %v", err)
 		}
@@ -447,6 +450,7 @@ func parseLength(length byte, reader *bufio.Reader) (int, error) {
 	// 10	Discard the remaining 6 bits. The next 4 bytes from the stream represent the length
 	case 0b10:
 		lenBytes, err := reader.ReadBytes(4)
+		fmt.Println("reading 4 more bytes")
 		if err != nil {
 			return 0, fmt.Errorf("error reading the next 4 bytes for length %v", err)
 		}
@@ -464,6 +468,7 @@ func parseLength(length byte, reader *bufio.Reader) (int, error) {
 		// 0 indicates that an 8 bit integer follows
 		case 0:
 			length, err := reader.ReadByte()
+			fmt.Println("reading one more byte")
 			if err != nil {
 				return 0, fmt.Errorf("error reading the length bytes for 4 byte string: %v", err)
 			}
@@ -471,6 +476,7 @@ func parseLength(length byte, reader *bufio.Reader) (int, error) {
 		// 1 indicates that a 16 bit integer follows
 		case 1:
 			length, err := reader.ReadBytes(2)
+			fmt.Println("reading 2 more bytes")
 			if err != nil {
 				return 0, fmt.Errorf("error reading the length bytes for 4 byte string: %v", err)
 			}
@@ -482,6 +488,7 @@ func parseLength(length byte, reader *bufio.Reader) (int, error) {
 		// 2 indicates that a 32 bit integer follows
 		case 2:
 			length, err := reader.ReadBytes(4)
+			fmt.Println("reading 4 more bytes")
 			if err != nil {
 				return 0, fmt.Errorf("error reading the length bytes for 4 byte string: %v", err)
 			}
@@ -494,12 +501,12 @@ func parseLength(length byte, reader *bufio.Reader) (int, error) {
 			return 0, fmt.Errorf("bad encoding")
 		}
 	default:
-		return 0, fmt.Errorf("bad encoding")
+		return 0, fmt.Errorf("invalid length encoding")
 	}
 }
 
 func (server *Server) loadRdb() error {
-	filepath := server.opts.Dir + server.opts.DbFileName
+	filepath := server.opts.Dir + "/" + server.opts.DbFileName
 	fmt.Printf("filepath for rdb file = %s", filepath)
 	file, err := os.Open(filepath)
 	if err != nil {
@@ -558,7 +565,7 @@ SkipToDB:
 			if err != nil {
 				return fmt.Errorf("error parsing expiry table size %v", err)
 			}
-			fmt.Printf("Hash Table size: = %d\n", expiryTableSize)
+			fmt.Printf("Expiry Hash Table size: = %d\n", expiryTableSize)
 		case hasExpiryInSecKey:
 			var expiryBytes []byte
 			_, err := reader.Read(expiryBytes)
@@ -577,24 +584,36 @@ SkipToDB:
 			expiryVal = time.Now().Add(time.Duration(expiryBytesVal) * time.Millisecond)
 		case metadataStartKey:
 			fmt.Println("encountered metadata start")
-			return fmt.Errorf("encountered metadata start in middle of the database section")
+			continue
+			// return fmt.Errorf("encountered metadata start in middle of the database section")
 		case EOF:
-			return fmt.Errorf("encountered EOF")
+			fmt.Println("encountered EOF")
+			return nil
 		default:
 			// below is assuming the type flag was 00 => string
 			keyByte, err := reader.ReadByte()
 			if err != nil {
 				return fmt.Errorf("error reading key %v\n ", err)
 			}
-			key := string(keyByte)
+			key, err := server.parseString(keyByte, reader)
+			if err != nil {
+				return fmt.Errorf("error reading key %v\n ", err)
+			}
+			fmt.Println("reading the key", key)
 
 			valueByte, err := reader.ReadByte()
 			if err != nil {
 				return fmt.Errorf("error reading value %v\n ", err)
 			}
-			value := string(valueByte)
-			if !expiryVal.IsZero() && !time.Now().After(expiryVal) {
+			value, err := server.parseString(valueByte, reader)
+			if err != nil {
+				return fmt.Errorf("error parsing value %v\n ", err)
+			}
+
+			fmt.Println("reading the value", value)
+			if expiryVal.IsZero() || !time.Now().After(expiryVal) {
 				//skip adding already expired keys, this is possible as we are reading from the rdb file
+				fmt.Print("Adding to DB....")
 				server.storage.AddToDataBase(key, value, expiryVal)
 			}
 			expiryVal = time.Time{}
@@ -602,7 +621,33 @@ SkipToDB:
 	}
 	// return nil
 }
+func (server *Server) parseString(b byte, reader *bufio.Reader) (string, error) {
+	length, err := parseLength(b, reader)
+	if err != nil {
+		return "", fmt.Errorf("parseLength failed: %v", err)
+	}
+	fmt.Printf("String length: %d\n", length)
 
+	if length < 0 {
+		return "", fmt.Errorf("invalid string length: %d", length)
+	}
+
+	// Handle empty string case
+	if length == 0 {
+		return "", nil
+	}
+
+	str := make([]byte, length)
+	n, err := reader.Read(str)
+	if err != nil {
+		return "", fmt.Errorf("Read failed: %v", err)
+	}
+	if n != length {
+		return "", fmt.Errorf("read string length mismatch: expected %d, got %d", length, n)
+	}
+	fmt.Printf("Parsed string: %s\n", string(str[:n]))
+	return string(str[:n]), nil
+}
 func (server *Server) handle() {
 	defer server.conn.conn.Close()
 	//load the rdb file
@@ -735,7 +780,7 @@ func (server *Server) sendHandshake(opts Opts) error {
 
 	_, err := server.conn.conn.Write([]byte("*1\r\n$4\r\nPING\r\n"))
 	if err != nil {
-		fmt.Println("Error while connecting to the master %v", err)
+		fmt.Printf("Error while connecting to the master %v\n", err)
 		os.Exit(1)
 	}
 
@@ -751,7 +796,7 @@ func (server *Server) sendHandshake(opts Opts) error {
 
 	_, err = server.conn.conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n"))
 	if err != nil {
-		fmt.Println("error while connecting to the master %v", err)
+		fmt.Printf("error while connecting to the master %v\n", err)
 		os.Exit(1)
 	}
 
@@ -785,7 +830,7 @@ func (server *Server) sendHandshake(opts Opts) error {
 
 	_, err = server.conn.conn.Write([]byte("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"))
 	if err != nil {
-		fmt.Println("Error while connecting to the master %v", err)
+		fmt.Printf("Error while connecting to the master %v\n", err)
 		os.Exit(1)
 	}
 
@@ -805,12 +850,12 @@ func (server *Server) sendHandshake(opts Opts) error {
 	}
 
 	if response[0] != '$' {
-		return fmt.Errorf("Expected $, got %c", response[0])
+		return fmt.Errorf("expected $, got %c", response[0])
 	}
 
 	rdbFileLen, err := strconv.Atoi(response[1:])
 	if err != nil {
-		return fmt.Errorf("Atoi failed with %v", err)
+		return fmt.Errorf("atoi failed with %v", err)
 	}
 
 	//TODO: should we store this content somewhere??

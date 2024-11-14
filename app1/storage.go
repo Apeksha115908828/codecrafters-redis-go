@@ -57,9 +57,10 @@ func (store *Storage) AddToDataBase(key string, value string, expiryVal time.Tim
 
 func (store *Storage) getAllKeysFromRDB() ([]string, error) {
 	var keys []string
+	fmt.Printf("came here, store.db size = %d", len(store.db))
 	for key, value := range store.db {
 		keys = append(keys, key)
-		fmt.Printf("Key: %s, Value: %+v\n", key, value)
+		fmt.Printf("Key: %s, Value: %s\n", key, value.value)
 	}
 	return keys, nil
 }
