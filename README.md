@@ -32,3 +32,22 @@ Note: This section is for stages 2 and beyond.
    in `app/server.go`.
 1. Commit your changes and run `git push origin master` to submit your solution
    to CodeCrafters. Test output will be streamed to your terminal.
+
+
+
+How to create an example RDB file:
+
+Open two Terminal windows
+
+Terminal #1> redis-server
+
+Terminal #2> redis-cli set mykey myval Terminal #2> redis-cli save
+
+On Terminal #1:
+
+Press ctrl + c to shut down redis-server. You'll see dump.rdb created
+To inspect its contents you can use: hexdump -C dump.rdb
+
+68
+
+

@@ -2,10 +2,10 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
-	"fmt"
 )
 
 type Opts struct {
@@ -39,16 +39,16 @@ type Connection struct {
 }
 
 type MasterConfig struct {
-	slaves 		*Slaves		// change to slaves class
-	wg 			*sync.WaitGroup
-	propOffset 	int
+	slaves     *Slaves // change to slaves class
+	wg         *sync.WaitGroup
+	propOffset int
 }
 
 type Server struct {
-	conn 	*Connection
-	opts 	Opts
+	conn    *Connection
+	opts    Opts
 	storage *Storage
-	
+
 	mc *MasterConfig
 }
 
@@ -77,7 +77,7 @@ func (slaves *Slaves) HandleAck(addr net.Addr, ack int) error {
 
 	slave, ok := slaves.list[addr.String()]
 	if !ok {
-		return fmt.Errorf("Slave retrieval failed for %s", addr.String())
+		return fmt.Errorf("slave retrieval failed for %s", addr.String())
 	}
 	slave.offset = ack
 	fmt.Println("Setting offset of", slave, " to ack = ", ack)
@@ -90,21 +90,23 @@ func (slaves *Slaves) Count() int {
 
 	return len(slaves.list)
 }
+
 var storage = NewStore()
+
 func NewMaster(conn *Connection, opts Opts, mc *MasterConfig) *Server {
 	return &Server{
-		conn: conn,
-		opts: opts,
+		conn:    conn,
+		opts:    opts,
 		storage: storage, //TODO: what to put here??
-		
+
 		mc: mc,
 	}
 }
 
 func NewReplica(conn *Connection, opts Opts) *Server {
 	return &Server{
-		conn: conn,
-		opts: opts,
+		conn:    conn,
+		opts:    opts,
 		storage: storage, //TODO: what to put here??
 	}
 }

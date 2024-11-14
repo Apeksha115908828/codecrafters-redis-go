@@ -25,23 +25,23 @@ type Storage struct {
 
 func (store *Storage) GetFromDataBase(key string) (*string, error) {
 	if store.db == nil {
-        return nil, fmt.Errorf("database is not initialized")
-    }
+		return nil, fmt.Errorf("database is not initialized")
+	}
 	fmt.Println("size of the store: ", len(store.db))
-	for k, v := range store.db {
-        fmt.Printf("Key: %s, Value: %+v\n", k, v)
-    }
+	// for k, v := range store.db {
+	// 	fmt.Printf("Key: %s, Value: %+v\n", k, v)
+	// }
 	value, ok := store.db[key]
 	if !ok {
-		return nil, fmt.Errorf("Error while retrieving the value of the entry %v for key %s", ok, key)
+		return nil, fmt.Errorf("error while retrieving the value of the entry %v for key %s", ok, key)
 	}
 
 	if !value.expiry.IsZero() && time.Now().After(value.expiry) {
 		fmt.Println("figured out it is expired")
 		delete(store.db, key)
-		return nil, fmt.Errorf("Expired key...")
+		return nil, fmt.Errorf("expired key")
 	}
-	
+
 	return &value.value, nil
 }
 
@@ -53,6 +53,15 @@ func (store *Storage) AddToDataBase(key string, value string, expiryVal time.Tim
 	}
 	fmt.Println("AddtoDatabase storing data", store.db[key].value)
 	fmt.Println("In set function size of the store: ", len(store.db))
+}
+
+func (store *Storage) getAllKeysFromRDB() ([]string, error) {
+	var keys []string
+	for key, value := range store.db {
+		keys = append(keys, key)
+		fmt.Printf("Key: %s, Value: %+v\n", key, value)
+	}
+	return keys, nil
 }
 
 func NewStore() *Storage {

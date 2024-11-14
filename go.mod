@@ -12,5 +12,7 @@ go 1.22.0
 
 require (
 	github.com/jessevdk/go-flags v1.6.1 // indirect
+	github.com/tommy351/rdb-go v0.6.1 // indirect
+	github.com/zhuyie/golzf v0.0.0-20161112031142-8387b0307ade // indirect
 	golang.org/x/sys v0.21.0 // indirect
 )
