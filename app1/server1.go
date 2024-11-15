@@ -488,7 +488,7 @@ func (server *Server) handleXADD(request []string) (string, error) {
 		server.storage.AddToStream(key, id, kvpairs)
 		return fmt.Sprintf("$" + strconv.Itoa(len(id)) + "\r\n" + id + "\r\n"), nil
 	} else {
-		return fmt.Sprintf("-ERR The ID specified in XADD must be greater than 0-0\r\n")
+		return fmt.Sprintf("-ERR The ID specified in XADD must be greater than 0-0\r\n"), nil
 	}
 
 }
