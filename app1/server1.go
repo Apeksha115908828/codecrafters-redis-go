@@ -491,6 +491,9 @@ func (server *Server) handleXADD(request []string) (string, error) {
 			kvpairs[key] = value
 		}
 		id = server.storage.AddToStream(key, id, kvpairs)
+		if server.mc.wg != nil {
+			server.mc.wg.Done()
+		}
 		return fmt.Sprintf("$" + strconv.Itoa(len(id)) + "\r\n" + id + "\r\n"), nil
 	} else {
 		return fmt.Sprintf("-ERR The ID specified in XADD " + err + "\r\n"), nil
@@ -548,21 +551,24 @@ func (server *Server) handleXREAD(request []string) (string, error) {
 	if request[0] == "block" {
 		blockTime, _ := strconv.Atoi(request[1])
 		fmt.Printf("blockTime = %d\n", blockTime)
-		time.Sleep(time.Duration(blockTime) * time.Millisecond)
+		if blockTime == 0 {
+			server.mc.wg = &sync.WaitGroup{}
+			server.mc.wg.Add(1)
+
+			ch := make(chan struct{})
+			go func() {
+				defer close(ch)
+				server.mc.wg.Wait()
+			}()
+
+			select {
+			case <-ch:
+			}
+		} else {
+			time.Sleep(time.Duration(blockTime) * time.Millisecond)
+		}
+
 		request = request[2:]
-	} else {
-		// server.mc.wg = &sync.WaitGroup{}
-		// server.mc.wg.Add(1)
-
-		// ch := make(chan struct{})
-		// go func() {
-		// 	defer close(ch)
-		// 	server.mc.wg.Wait()
-		// }()
-
-		// select {
-		// case <-ch:
-		// }
 	}
 	fmt.Println("got past the block")
 	if request[0] == "streams" {
