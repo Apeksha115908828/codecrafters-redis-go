@@ -546,13 +546,29 @@ func (server *Server) handleXRANGE(request []string) (string, error) {
 
 func (server *Server) handleXREAD(request []string) (string, error) {
 	if request[0] == "block" {
-		blockTime := request[1]
-		fmt.Printf("blockTime = %s\n", blockTime)
+		blockTime, _ := strconv.Atoi(request[1])
+		fmt.Printf("blockTime = %d\n", blockTime)
+		time.Sleep(time.Duration(blockTime) * time.Millisecond)
 		request = request[2:]
+	} else {
+		// server.mc.wg = &sync.WaitGroup{}
+		// server.mc.wg.Add(1)
+
+		// ch := make(chan struct{})
+		// go func() {
+		// 	defer close(ch)
+		// 	server.mc.wg.Wait()
+		// }()
+
+		// select {
+		// case <-ch:
+		// }
 	}
+	fmt.Println("got past the block")
 	if request[0] == "streams" {
+		shouldReturnEmpty := true
 		request = request[1:]
-		num_streams := (len(request) - 1) / 2
+		num_streams := (len(request)) / 2
 		responses := []string{}
 		responses = append(responses, "*"+strconv.Itoa(num_streams)+"\r\n")
 		keys := []string{}
@@ -563,7 +579,7 @@ func (server *Server) handleXREAD(request []string) (string, error) {
 		for j := 0; j < num_streams; j++ {
 			ids = append(ids, request[j+num_streams])
 		}
-
+		fmt.Println("processing num_streams = ", num_streams)
 		for j := 0; j < num_streams; j++ {
 			key := keys[j]
 			id := ids[j]
@@ -580,7 +596,7 @@ func (server *Server) handleXREAD(request []string) (string, error) {
 			if err != nil {
 				return "", fmt.Errorf("error retrieving version %v \n ", err)
 			}
-			lower := strings.Split(id, "-")[0] + "-" + strconv.Itoa(minor_ver)
+			lower := strings.Split(id, "-")[0] + "-" + strconv.Itoa(minor_ver+1)
 
 			// as we need all entries with ids > id,
 			currentTime := time.Now()
@@ -597,6 +613,7 @@ func (server *Server) handleXREAD(request []string) (string, error) {
 			responses = append(responses, "*"+length+"\r\n")
 			fmt.Printf("response = %d \n", len(responses))
 			for i := 0; i < len(streams); i++ {
+				shouldReturnEmpty = false
 				stream := streams[i]
 				responses = append(responses, "*2\r\n")
 				responses = append(responses, "$"+strconv.Itoa(len(stream.id))+"\r\n"+stream.id+"\r\n")
@@ -608,6 +625,9 @@ func (server *Server) handleXREAD(request []string) (string, error) {
 				}
 				fmt.Printf("response = %s \n", responses[len(responses)-1])
 			}
+		}
+		if shouldReturnEmpty {
+			return "$-1\r\n", nil
 		}
 		response := ""
 		for i := 0; i < len(responses); i++ {
