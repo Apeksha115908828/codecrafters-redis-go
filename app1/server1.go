@@ -545,17 +545,23 @@ func (server *Server) handleXRANGE(request []string) (string, error) {
 }
 
 func (server *Server) handleXREAD(request []string) (string, error) {
+	if request[0] == "block" {
+		blockTime := request[1]
+		fmt.Printf("blockTime = %s\n", blockTime)
+		request = request[2:]
+	}
 	if request[0] == "streams" {
+		request = request[1:]
 		num_streams := (len(request) - 1) / 2
 		responses := []string{}
 		responses = append(responses, "*"+strconv.Itoa(num_streams)+"\r\n")
 		keys := []string{}
 		ids := []string{}
 		for j := 0; j < num_streams; j++ {
-			keys = append(keys, request[j+1])
+			keys = append(keys, request[j])
 		}
 		for j := 0; j < num_streams; j++ {
-			ids = append(ids, request[j+1+num_streams])
+			ids = append(ids, request[j+num_streams])
 		}
 
 		for j := 0; j < num_streams; j++ {
