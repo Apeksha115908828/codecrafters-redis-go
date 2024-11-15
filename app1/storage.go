@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -30,7 +31,7 @@ type Storage struct {
 	stream map[string][]*StreamEntry
 }
 
-func (store *Storage) AddToStream(key string, id string, stream_vals map[string]string) {
+func (store *Storage) AddToStream(key string, id string, stream_vals map[string]string) string {
 	entry := &StreamEntry{
 		id:      id,
 		kvpairs: stream_vals,
@@ -39,6 +40,7 @@ func (store *Storage) AddToStream(key string, id string, stream_vals map[string]
 	entries := store.stream[key]
 	entries = append(entries, entry)
 	store.stream[key] = entries
+	return id
 }
 
 // Append
@@ -46,6 +48,61 @@ func (store *Storage) AddToStream(key string, id string, stream_vals map[string]
 func (store *Storage) findKeyInStream(key string) bool {
 	_, ok := store.stream[key]
 	return ok
+}
+
+func (store *Storage) autoGenerateID(key string, id string) string {
+	stream, ok := store.stream[key]
+	if !ok {
+		if id == "*" {
+			return "0-1"
+		} else {
+			major_version := strings.Split(id, "-")[0]
+			if major_version == "0" {
+				return major_version + "-1"
+			} else {
+				return major_version + "-0"
+			}
+		}
+	}
+
+	// partial
+	if id == "*" {
+		max_id := strings.Split(stream[0].id, "-")
+		for i := 1; i < len(stream); i++ {
+			curr_id := strings.Split(stream[i].id, "-")
+			if curr_id[0] > max_id[0] {
+				max_id = curr_id
+			} else if curr_id[0] == max_id[0] && curr_id[1] > max_id[1] {
+				max_id = curr_id
+			}
+		}
+		minor, err := strconv.Atoi(max_id[1])
+		if err != nil {
+			fmt.Printf("Error using Atoi %v \n", err)
+		}
+		return max_id[0] + "-" + strconv.Itoa(minor+1)
+	} else {
+		curr_major := strings.Split(id, "-")[0]
+		curr_minor := "0"
+		fmt.Printf("curr_major = %s curr_minor = %s\n", curr_major, curr_minor)
+		for i := 0; i < len(stream); i++ {
+			curr_id := strings.Split(stream[i].id, "-")
+			if curr_id[0] == curr_major {
+				if curr_id[1] >= curr_minor {
+					minor, err := strconv.Atoi(curr_id[1])
+					if err != nil {
+						fmt.Printf("Error using Atoi %v \n", err)
+					}
+					curr_minor = strconv.Itoa(minor + 1)
+					fmt.Printf("curr_major = %s curr_minor = %s\n", curr_major, curr_minor)
+				}
+			}
+		}
+		if curr_major == "0" && curr_minor == "0" {
+			return "0-1"
+		}
+		return curr_major + "-" + curr_minor
+	}
 }
 
 func (store *Storage) checkIDValidity(key string, id string) (string, bool) {

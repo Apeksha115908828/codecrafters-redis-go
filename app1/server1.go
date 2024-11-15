@@ -477,6 +477,10 @@ func (server *Server) handleXADD(request []string) (string, error) {
 
 	key := request[0]
 	id := request[1]
+	if strings.Contains(id, "*") {
+		id = server.storage.autoGenerateID(key, id)
+		fmt.Printf("generated id = %s", id)
+	}
 	err, isValid := server.storage.checkIDValidity(key, id)
 	if isValid {
 		kvpairs := make(map[string]string, 0)
@@ -486,7 +490,7 @@ func (server *Server) handleXADD(request []string) (string, error) {
 			i += 1
 			kvpairs[key] = value
 		}
-		server.storage.AddToStream(key, id, kvpairs)
+		id = server.storage.AddToStream(key, id, kvpairs)
 		return fmt.Sprintf("$" + strconv.Itoa(len(id)) + "\r\n" + id + "\r\n"), nil
 	} else {
 		return fmt.Sprintf("-ERR The ID specified in XADD " + err + "\r\n"), nil
