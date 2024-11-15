@@ -417,23 +417,34 @@ func (server *Server) handleKeys(key string) error {
 
 func (server *Server) handleIncr(key string) error {
 	fmt.Println("HandleIncr called for key = ", key)
-	var value string = ""
+	// var value string = ""
+	var valueint int = 0
 	val, err := server.storage.GetFromDataBase(key)
 	if err != nil {
-		fmt.Println("Error getting value from store", value)
+		fmt.Println("Error getting value from store", valueint)
 		// server.storage.AddToDataBase(key, string(1), time.Time{})
-		value = "0"
-
+		// value = "0"
 	} else {
-		value = *val
+		value := *val
+		fmt.Printf("calling strconv on val %s\n", value)
+		valueint, err = strconv.Atoi(value)
+		if err != nil {
+			_, err = server.conn.conn.Write([]byte("-ERR value is not an integer or out of range\r\n"))
+			if err != nil {
+				return fmt.Errorf("error writing to conn %v", err)
+			}
+			return fmt.Errorf("error while converting the value to string")
+		}
 	}
-	valueint, err := strconv.Atoi(value)
-	if err != nil {
-		return fmt.Errorf("error while converting the value to string")
-	}
+	fmt.Println("Got value for key = ", valueint)
+	// valueint, err := strconv.Atoi(value)
+
 	valueint += 1
-	server.storage.AddToDataBase(key, string(valueint), time.Time{})
-	server.conn.conn.Write([]byte(":" + strconv.Itoa(valueint) + "\r\n"))
+	server.storage.AddToDataBase(key, strconv.Itoa(valueint), time.Time{})
+	_, err = server.conn.conn.Write([]byte(":" + strconv.Itoa(valueint) + "\r\n"))
+	if err != nil {
+		return fmt.Errorf("error writing to conn %v", err)
+	}
 
 	return nil
 }
@@ -777,6 +788,10 @@ func (server *Server) handle() {
 				fmt.Printf("%s Command expects an argument\n", request[0])
 			}
 			err = server.handleIncr(request[1])
+		// case "MULTI":
+		// 	err = server.handleMulti()
+		// case "EXEC":
+		// 	err = server.handleExec()
 		default:
 			//handle default
 		}
