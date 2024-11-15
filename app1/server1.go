@@ -546,49 +546,63 @@ func (server *Server) handleXRANGE(request []string) (string, error) {
 
 func (server *Server) handleXREAD(request []string) (string, error) {
 	if request[0] == "streams" {
-		key := request[1]
-		id := request[2]
-		// as we need all entries with ids > id,
-		minor_ver, err := strconv.Atoi(strings.Split(id, "-")[1])
-		if err != nil {
-			return "", fmt.Errorf("error retrieving version %v \n ", err)
-		}
-		lower := strings.Split(id, "")[0] + "-" + strconv.Itoa(minor_ver)
-		// return server.handleXRANGE(request_params)
-
-		currentTime := time.Now()
-		unixTimestampMillis := currentTime.UnixNano() / int64(time.Millisecond)
-		timestampStr := strconv.FormatInt(unixTimestampMillis, 10)
-		upper := timestampStr + "-0"
-
-		streams := server.storage.getAllKVsInRangeStream(key, lower, upper)
-		fmt.Printf("Length of streams = %d\n", len(streams))
-		length := strconv.Itoa(len(streams))
+		num_streams := (len(request) - 1) / 2
 		responses := []string{}
-		// response := fmt.Sprintf("*" + length + "\r\n")
-		responses = append(responses, "*1\r\n")
-		responses = append(responses, "*2\r\n")
-		responses = append(responses, "$"+strconv.Itoa(len(key))+"\r\n"+key+"\r\n")
-		responses = append(responses, "*"+length+"\r\n")
-		fmt.Printf("response = %d \n", len(responses))
-		for i := 0; i < len(streams); i++ {
-			stream := streams[i]
-			// response += "*2\r\n"
-			responses = append(responses, "*2\r\n")
-			// response += fmt.Sprintf("$" + strconv.Itoa(len(stream.id)) + "\r\n" + stream.id + "\r\n")
-			responses = append(responses, "$"+strconv.Itoa(len(stream.id))+"\r\n"+stream.id+"\r\n")
-			num_kvpairs := strconv.Itoa(2 * len(stream.kvpairs))
-			// response += "*" + strconv.Itoa(len(num_kvpairs)) + "\r\n" + num_kvpairs + "\r\n"
-			responses = append(responses, "*"+num_kvpairs+"\r\n")
-			for key, value := range stream.kvpairs {
-				// response += fmt.Sprintf("$" + strconv.Itoa(len(key)) + "\r\n" + key + "\r\n")
-				responses = append(responses, "$"+strconv.Itoa(len(key))+"\r\n"+key+"\r\n")
-				// response += fmt.Sprintf("$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
-				responses = append(responses, "$"+strconv.Itoa(len(value))+"\r\n"+value+"\r\n")
-			}
-			fmt.Printf("response = %s \n", responses[len(responses)-1])
+		responses = append(responses, "*"+strconv.Itoa(num_streams)+"\r\n")
+		keys := []string{}
+		ids := []string{}
+		for j := 0; j < num_streams; j++ {
+			keys = append(keys, request[j+1])
+		}
+		for j := 0; j < num_streams; j++ {
+			ids = append(ids, request[j+1+num_streams])
 		}
 
+		for j := 0; j < num_streams; j++ {
+			key := keys[j]
+			id := ids[j]
+			// if strings.Contains(id, "*") {
+			// 	id = server.storage.autoGenerateID(key, id)
+			// 	fmt.Printf("generated id = %s", id)
+			// }
+			// err, isValid := server.storage.checkIDValidity(key, id)
+			// if !isValid {
+			// 	return "", fmt.Errorf("error in id %s", err)
+			// }
+			fmt.Printf("key = %s and id = %s\n", key, id)
+			minor_ver, err := strconv.Atoi(strings.Split(id, "-")[1])
+			if err != nil {
+				return "", fmt.Errorf("error retrieving version %v \n ", err)
+			}
+			lower := strings.Split(id, "-")[0] + "-" + strconv.Itoa(minor_ver)
+
+			// as we need all entries with ids > id,
+			currentTime := time.Now()
+			unixTimestampMillis := currentTime.UnixNano() / int64(time.Millisecond)
+			timestampStr := strconv.FormatInt(unixTimestampMillis, 10)
+			upper := timestampStr + "-0"
+
+			streams := server.storage.getAllKVsInRangeStream(key, lower, upper)
+			fmt.Printf("Length of streams = %d\n", len(streams))
+			length := strconv.Itoa(len(streams))
+
+			responses = append(responses, "*2\r\n")
+			responses = append(responses, "$"+strconv.Itoa(len(key))+"\r\n"+key+"\r\n")
+			responses = append(responses, "*"+length+"\r\n")
+			fmt.Printf("response = %d \n", len(responses))
+			for i := 0; i < len(streams); i++ {
+				stream := streams[i]
+				responses = append(responses, "*2\r\n")
+				responses = append(responses, "$"+strconv.Itoa(len(stream.id))+"\r\n"+stream.id+"\r\n")
+				num_kvpairs := strconv.Itoa(2 * len(stream.kvpairs))
+				responses = append(responses, "*"+num_kvpairs+"\r\n")
+				for key, value := range stream.kvpairs {
+					responses = append(responses, "$"+strconv.Itoa(len(key))+"\r\n"+key+"\r\n")
+					responses = append(responses, "$"+strconv.Itoa(len(value))+"\r\n"+value+"\r\n")
+				}
+				fmt.Printf("response = %s \n", responses[len(responses)-1])
+			}
+		}
 		response := ""
 		for i := 0; i < len(responses); i++ {
 			response += responses[i]
