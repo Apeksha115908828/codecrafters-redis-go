@@ -444,7 +444,7 @@ func (server *Server) handleIncr(key string) (string, error) {
 			// 	return fmt.Errorf("error writing to conn %v", err)
 			// }
 			// return fmt.Errorf("error while converting the value to string")
-			return fmt.Sprintf("-ERR value is not an integer or out of range\r\n"), nil
+			return "-ERR value is not an integer or out of range\r\n", nil
 		}
 	}
 	fmt.Println("Got value for key = ", valueint)
@@ -477,7 +477,8 @@ func (server *Server) handleXADD(request []string) (string, error) {
 
 	key := request[0]
 	id := request[1]
-	if server.storage.checkIDValidity(key, id) {
+	err, isValid := server.storage.checkIDValidity(key, id)
+	if isValid {
 		kvpairs := make(map[string]string, 0)
 		for i := 2; i < len(request); i++ {
 			key := request[i]
@@ -488,7 +489,7 @@ func (server *Server) handleXADD(request []string) (string, error) {
 		server.storage.AddToStream(key, id, kvpairs)
 		return fmt.Sprintf("$" + strconv.Itoa(len(id)) + "\r\n" + id + "\r\n"), nil
 	} else {
-		return fmt.Sprintf("-ERR The ID specified in XADD must be greater than 0-0\r\n"), nil
+		return fmt.Sprintf("-ERR The ID specified in XADD " + err + "\r\n"), nil
 	}
 
 }

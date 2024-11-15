@@ -27,34 +27,50 @@ type StreamEntry struct {
 
 type Storage struct {
 	db     map[string]*DataEntry
-	stream map[string]*StreamEntry
+	stream map[string][]*StreamEntry
 }
 
 func (store *Storage) AddToStream(key string, id string, stream_vals map[string]string) {
-	store.stream[key] = &StreamEntry{
+	entry := &StreamEntry{
 		id:      id,
 		kvpairs: stream_vals,
 	}
+	store.stream[key] = make([]*StreamEntry, 0)
+	entries := store.stream[key]
+	entries = append(entries, entry)
+	store.stream[key] = entries
 }
+
+// Append
 
 func (store *Storage) findKeyInStream(key string) bool {
 	_, ok := store.stream[key]
 	return ok
 }
 
-func (store *Storage) checkIDValidity(key string, id string) bool {
-	value, ok := store.stream[key]
+func (store *Storage) checkIDValidity(key string, id string) (string, bool) {
+	if id == "0-0" {
+		return "must be greater than 0-0", false
+	}
+	stream, ok := store.stream[key]
 	if !ok {
-		return true
+		return "", true
 	} else {
-		old_id := strings.Split(value.id, "-")
 		new_id := strings.Split(id, "-")
-		if new_id[0] > old_id[0] {
-			return true
-		} else if new_id[1] > old_id[1] {
-			return true
+		isStillValid := true
+
+		for index := range stream {
+			entry := stream[index]
+			old_id := strings.Split(entry.id, "-")
+			if new_id[0] > old_id[0] || (new_id[0] == old_id[0] && new_id[1] > old_id[1]) {
+				isStillValid = true
+			} else {
+				return "is equal or smaller than the target stream top item", false
+			}
+			fmt.Printf("old_id = %s-%s, new_id = %s-%s", old_id[0], old_id[1], new_id[0], new_id[1])
 		}
-		return false
+		fmt.Printf("\nlen(stream) = %d\n", len(stream))
+		return "", isStillValid
 	}
 }
 
@@ -117,6 +133,6 @@ func NewStore() *Storage {
 	fmt.Println("Came to create a new store")
 	return &Storage{
 		db:     make(map[string]*DataEntry),
-		stream: make(map[string]*StreamEntry),
+		stream: make(map[string][]*StreamEntry),
 	}
 }
