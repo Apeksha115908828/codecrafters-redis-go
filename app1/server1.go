@@ -544,6 +544,62 @@ func (server *Server) handleXRANGE(request []string) (string, error) {
 	return response, nil
 }
 
+func (server *Server) handleXREAD(request []string) (string, error) {
+	if request[0] == "streams" {
+		key := request[1]
+		id := request[2]
+		// as we need all entries with ids > id,
+		minor_ver, err := strconv.Atoi(strings.Split(id, "-")[1])
+		if err != nil {
+			return "", fmt.Errorf("error retrieving version %v \n ", err)
+		}
+		lower := strings.Split(id, "")[0] + "-" + strconv.Itoa(minor_ver)
+		// return server.handleXRANGE(request_params)
+
+		currentTime := time.Now()
+		unixTimestampMillis := currentTime.UnixNano() / int64(time.Millisecond)
+		timestampStr := strconv.FormatInt(unixTimestampMillis, 10)
+		upper := timestampStr + "-0"
+
+		streams := server.storage.getAllKVsInRangeStream(key, lower, upper)
+		fmt.Printf("Length of streams = %d\n", len(streams))
+		length := strconv.Itoa(len(streams))
+		responses := []string{}
+		// response := fmt.Sprintf("*" + length + "\r\n")
+		responses = append(responses, "*1\r\n")
+		responses = append(responses, "*2\r\n")
+		responses = append(responses, "$"+strconv.Itoa(len(key))+"\r\n"+key+"\r\n")
+		responses = append(responses, "*"+length+"\r\n")
+		fmt.Printf("response = %d \n", len(responses))
+		for i := 0; i < len(streams); i++ {
+			stream := streams[i]
+			// response += "*2\r\n"
+			responses = append(responses, "*2\r\n")
+			// response += fmt.Sprintf("$" + strconv.Itoa(len(stream.id)) + "\r\n" + stream.id + "\r\n")
+			responses = append(responses, "$"+strconv.Itoa(len(stream.id))+"\r\n"+stream.id+"\r\n")
+			num_kvpairs := strconv.Itoa(2 * len(stream.kvpairs))
+			// response += "*" + strconv.Itoa(len(num_kvpairs)) + "\r\n" + num_kvpairs + "\r\n"
+			responses = append(responses, "*"+num_kvpairs+"\r\n")
+			for key, value := range stream.kvpairs {
+				// response += fmt.Sprintf("$" + strconv.Itoa(len(key)) + "\r\n" + key + "\r\n")
+				responses = append(responses, "$"+strconv.Itoa(len(key))+"\r\n"+key+"\r\n")
+				// response += fmt.Sprintf("$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
+				responses = append(responses, "$"+strconv.Itoa(len(value))+"\r\n"+value+"\r\n")
+			}
+			fmt.Printf("response = %s \n", responses[len(responses)-1])
+		}
+
+		response := ""
+		for i := 0; i < len(responses); i++ {
+			response += responses[i]
+		}
+
+		return response, nil
+	} else {
+		return "", fmt.Errorf("ill formed request")
+	}
+}
+
 const (
 	dbStartKey         byte = 0xFE
 	metadataStartKey   byte = 0xFA
@@ -929,6 +985,12 @@ func (server *Server) handleRequest(request []string, offset int) (string, int, 
 			break
 		}
 		response, err = server.handleXRANGE(request[1:])
+	case "XREAD":
+		if len(request) < 4 {
+			fmt.Printf("%s Command expects an argument\n", request[0])
+			break
+		}
+		response, err = server.handleXREAD(request[1:])
 	default:
 		//handle default
 	}
