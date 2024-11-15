@@ -832,10 +832,11 @@ func (server *Server) handle() {
 			if server.isqueuing {
 				server.queue = append(server.queue, request)
 				server.conn.conn.Write([]byte("+QUEUED\r\n"))
-			}
-			offset, err = server.handleRequest(request, offset)
-			if err != nil {
-				return
+			} else {
+				offset, err = server.handleRequest(request, offset)
+				if err != nil {
+					return
+				}
 			}
 		}
 
