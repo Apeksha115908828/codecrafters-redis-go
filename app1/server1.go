@@ -817,9 +817,11 @@ func (server *Server) handle() {
 		case "EXEC":
 			if !server.isqueuing {
 				server.conn.conn.Write([]byte("-ERR EXEC without MULTI\r\n"))
+				break
 			}
 			if len(server.queue) == 0 {
 				server.conn.conn.Write([]byte("*0\r\n"))
+				break
 			}
 			server.isqueuing = false
 			err = server.handleExec()
