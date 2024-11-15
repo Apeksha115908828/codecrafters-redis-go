@@ -495,7 +495,35 @@ func (server *Server) handleXADD(request []string) (string, error) {
 	} else {
 		return fmt.Sprintf("-ERR The ID specified in XADD " + err + "\r\n"), nil
 	}
+}
 
+func (server *Server) handleXRANGE(request []string) (string, error) {
+	key := request[0]
+	lower := request[1]
+	upper := request[2]
+	if lower == "-" {
+		lower = "0-0"
+	} else if upper == "+" {
+		currentTime := time.Now()
+		unixTimestampMillis := currentTime.UnixNano() / int64(time.Millisecond)
+		timestampStr := strconv.FormatInt(unixTimestampMillis, 10)
+		fmt.Printf("For * Generated id = %s", timestampStr)
+		upper = timestampStr + "-0"
+	}
+	streams := server.storage.getAllKVsInRangeStream(key, lower, upper)
+	response := "*" + strconv.Itoa(len(streams)) + "\r\n"
+	for i := 0; i < len(streams); i++ {
+		stream := streams[i]
+		response += "*2\r\n"
+		response += "$" + strconv.Itoa(len(stream.id)) + "\r\n" + stream.id + "\r\n"
+		num_kvpairs := strconv.Itoa(len(stream.kvpairs))
+		response += "*" + strconv.Itoa(len(num_kvpairs)) + "\r\n" + num_kvpairs + "\r\n"
+		for key, value := range stream.kvpairs {
+			response += "$" + strconv.Itoa(len(key)) + "\r\n" + key + "\r\n"
+			response += "$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n"
+		}
+	}
+	return response, nil
 }
 
 const (
@@ -856,23 +884,33 @@ func (server *Server) handleRequest(request []string, offset int) (string, int, 
 	case "KEYS":
 		if len(request) != 2 {
 			fmt.Printf("%s Command expects an argument\n", request[0])
+			break
 		}
 		response, err = server.handleKeys(request[1])
 	case "INCR":
 		if len(request) != 2 {
 			fmt.Printf("%s Command expects an argument\n", request[0])
+			break
 		}
 		response, err = server.handleIncr(request[1])
 	case "TYPE":
 		if len(request) != 2 {
 			fmt.Printf("%s Command expects an argument\n", request[0])
+			break
 		}
 		response, err = server.handleType(request[1])
 	case "XADD":
 		if len(request) < 4 {
 			fmt.Printf("%s Command expects an argument\n", request[0])
+			break
 		}
 		response, err = server.handleXADD(request[1:])
+	case "XRANGE":
+		if len(request) < 4 {
+			fmt.Printf("%s Command expects an argument\n", request[0])
+			break
+		}
+		response, err = server.handleXRANGE(request[1:])
 	default:
 		//handle default
 	}

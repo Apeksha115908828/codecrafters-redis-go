@@ -43,7 +43,24 @@ func (store *Storage) AddToStream(key string, id string, stream_vals map[string]
 	return id
 }
 
-// Append
+func (store *Storage) getAllKVsInRangeStream(key string, start string, end string) []StreamEntry {
+	var rangeStreams []StreamEntry
+	stream, ok := store.stream[key]
+	if !ok {
+		return rangeStreams
+	}
+	start_id := strings.Split(start, "-")
+	end_id := strings.Split(end, "-")
+	for i := 0; i < len(stream); i++ {
+		curr_id := strings.Split(stream[i].id, "-")
+		if curr_id[0] > start_id[0] || (curr_id[0] == start_id[0] && curr_id[1] >= start_id[1]) {
+			if curr_id[0] < end_id[0] || (curr_id[0] == start_id[0] && curr_id[1] <= end_id[1]) {
+				rangeStreams = append(rangeStreams, *stream[i])
+			}
+		}
+	}
+	return rangeStreams
+}
 
 func (store *Storage) findKeyInStream(key string) bool {
 	_, ok := store.stream[key]
