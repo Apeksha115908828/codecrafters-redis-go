@@ -49,7 +49,9 @@ type Server struct {
 	opts    Opts
 	storage *Storage
 
-	mc *MasterConfig
+	mc        *MasterConfig
+	isqueuing bool
+	queue     [][]string
 }
 
 type Slaves struct {
@@ -99,7 +101,9 @@ func NewMaster(conn *Connection, opts Opts, mc *MasterConfig) *Server {
 		opts:    opts,
 		storage: storage, //TODO: what to put here??
 
-		mc: mc,
+		mc:        mc,
+		isqueuing: false,
+		queue:     make([][]string, 0),
 	}
 }
 

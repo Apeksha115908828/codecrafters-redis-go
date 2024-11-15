@@ -539,6 +539,19 @@ func parseLength(length byte, reader *bufio.Reader) (int, error) {
 	}
 }
 
+func (server *Server) handleMulti() error {
+	_, err := server.conn.conn.Write([]byte("+OK\r\n"))
+	return err
+}
+
+func (server *Server) handleExec() error {
+	return nil
+}
+
+func (server *Server) handleDiscard() error {
+	return nil
+}
+
 func (server *Server) loadRdb() error {
 	filepath := server.opts.Dir + "/" + server.opts.DbFileName
 	fmt.Printf("filepath for rdb file = %s", filepath)
@@ -692,6 +705,91 @@ func (server *Server) parseString(b byte, reader *bufio.Reader) (string, error) 
 	fmt.Printf("Parsed string: %s\n", string(str[:n]))
 	return string(str[:n]), nil
 }
+
+func (server *Server) handleRequest(request []string, offset int) (int, error) {
+	var err error
+	switch strings.ToUpper(request[0]) {
+	case "PING":
+		err = server.handlePing()
+		offset = 14
+	case "REPLCONF":
+		fmt.Println("got REPLCONF......")
+		if len(request) < 2 {
+			fmt.Println("Ill formed command REPLCONF")
+			break
+		}
+		err = server.handleReplconf(request[1:])
+		//handle replconf
+	case "PSYNC":
+		if len(request) != 3 {
+			fmt.Println("Ill formed command PSYNC")
+			break
+		}
+		err = server.handlePsync(request[1:])
+		//handle psync
+	case "ECHO":
+		if len(request) != 2 {
+			fmt.Printf("%s expects at least 1 argument\n", request[0])
+			break
+		}
+		err = server.handleEcho(request[1])
+	case "SET":
+		if len(request) < 2 {
+			fmt.Println("Ill formed command SET")
+			break
+		}
+		err = server.handleSet(request[1:])
+		fmt.Println("Handled Set on master........")
+		if server.opts.Role == "master" {
+			server.mc.slaves.lock.RLock()
+			fmt.Println("starting the loop....", len(server.mc.slaves.list))
+			for _, slave := range server.mc.slaves.list {
+				fmt.Println("....sending request to slaves : ", ToRespArray(request))
+				slave.conn.Write([]byte(ToRespArray(request)))
+			}
+			fmt.Println("done sending to slaves.....")
+			server.mc.slaves.lock.RUnlock()
+			server.mc.propOffset += len(ToRespArray(request))
+		}
+	case "GET":
+		if len(request) != 2 {
+			fmt.Println("Ill formed command GET")
+			break
+		}
+		err = server.handleGet(request[1:])
+	case "INFO":
+		if len(request) != 2 {
+			fmt.Printf("%s expects at least 1 argument \n", request[0])
+			break
+		}
+		err = server.handleInfo(request[1])
+	case "WAIT":
+		//handle wait
+		waitLock.Lock()
+		err = server.handleWait(request[1:])
+		waitLock.Unlock()
+	case "CONFIG":
+		if len(request) != 3 {
+			fmt.Println("Ill formed command", request[0])
+			break
+		}
+		err = server.handleConfig(request[1:])
+	case "KEYS":
+		if len(request) != 2 {
+			fmt.Printf("%s Command expects an argument\n", request[0])
+		}
+		err = server.handleKeys(request[1])
+	case "INCR":
+		if len(request) != 2 {
+			fmt.Printf("%s Command expects an argument\n", request[0])
+		}
+		err = server.handleIncr(request[1])
+	default:
+		//handle default
+	}
+	return offset, err
+}
+
 func (server *Server) handle() {
 	defer server.conn.conn.Close()
 	//load the rdb file
@@ -713,88 +811,30 @@ func (server *Server) handle() {
 		//handle the requests here....
 
 		switch strings.ToUpper(request[0]) {
-		case "PING":
-			err = server.handlePing()
-			offset = 14
-		case "REPLCONF":
-			fmt.Println("got REPLCONF......")
-			if len(request) < 2 {
-				fmt.Println("Ill formed command REPLCONF")
-				return
+		case "MULTI":
+			server.isqueuing = true
+			err = server.handleMulti()
+		case "EXEC":
+			if !server.isqueuing {
+				server.conn.conn.Write([]byte("-ERR EXEC without MULTI\r\n"))
 			}
-			err = server.handleReplconf(request[1:])
-			//handle replconf
-		case "PSYNC":
-			if len(request) != 3 {
-				fmt.Println("Ill formed command PSYNC")
-				return
+			if len(server.queue) == 0 {
+				server.conn.conn.Write([]byte("*0\r\n"))
 			}
-			err = server.handlePsync(request[1:])
-			//handle psync
-		case "ECHO":
-			if len(request) != 2 {
-				fmt.Printf("%s expects at least 1 argument\n", request[0])
-				return
-			}
-			err = server.handleEcho(request[1])
-		case "SET":
-			if len(request) < 2 {
-				fmt.Println("Ill formed command SET")
-				return
-			}
-			err = server.handleSet(request[1:])
-			fmt.Println("Handled Set on master........")
-			if server.opts.Role == "master" {
-				server.mc.slaves.lock.RLock()
-				fmt.Println("starting the loop....", len(server.mc.slaves.list))
-				for _, slave := range server.mc.slaves.list {
-					fmt.Println("....sending request to slaves : ", ToRespArray(request))
-					slave.conn.Write([]byte(ToRespArray(request)))
-				}
-				fmt.Println("done sending to slaves.....")
-				server.mc.slaves.lock.RUnlock()
-				server.mc.propOffset += len(ToRespArray(request))
-			}
-		case "GET":
-			if len(request) != 2 {
-				fmt.Println("Ill formed command GET")
-				return
-			}
-			err = server.handleGet(request[1:])
-		case "INFO":
-			if len(request) != 2 {
-				fmt.Printf("%s expects at least 1 argument \n", request[0])
-				return
-			}
-			err = server.handleInfo(request[1])
-		case "WAIT":
-			//handle wait
-			waitLock.Lock()
-			err = server.handleWait(request[1:])
-			waitLock.Unlock()
-		case "CONFIG":
-			if len(request) != 3 {
-				fmt.Println("Ill formed command", request[0])
-				return
-			}
-			err = server.handleConfig(request[1:])
-		case "KEYS":
-			if len(request) != 2 {
-				fmt.Printf("%s Command expects an argument\n", request[0])
-			}
-			err = server.handleKeys(request[1])
-		case "INCR":
-			if len(request) != 2 {
-				fmt.Printf("%s Command expects an argument\n", request[0])
-			}
-			err = server.handleIncr(request[1])
-		// case "MULTI":
-		// 	err = server.handleMulti()
-		// case "EXEC":
-		// 	err = server.handleExec()
+			server.isqueuing = false
+			err = server.handleExec()
+		case "DISCARD":
+			err = server.handleDiscard()
 		default:
-			//handle default
+			if server.isqueuing {
+				server.queue = append(server.queue, request)
+			}
+			offset, err = server.handleRequest(request, offset)
+			if err != nil {
+				return
+			}
 		}
+
 		if err != nil {
 			fmt.Println("command", request[0], "failed", err)
 			return
