@@ -36,9 +36,12 @@ func (store *Storage) AddToStream(key string, id string, stream_vals map[string]
 		id:      id,
 		kvpairs: stream_vals,
 	}
-	store.stream[key] = make([]*StreamEntry, 0)
+	if !store.findKeyInStream(key) {
+		store.stream[key] = make([]*StreamEntry, 0)
+	}
 	entries := store.stream[key]
 	entries = append(entries, entry)
+	fmt.Printf("num of entries for key = %s num_entries = %d", key, len(entries))
 	store.stream[key] = entries
 	return id
 }
@@ -51,10 +54,13 @@ func (store *Storage) getAllKVsInRangeStream(key string, start string, end strin
 	}
 	start_id := strings.Split(start, "-")
 	end_id := strings.Split(end, "-")
+	fmt.Printf("num streams = %d\n", len(stream))
 	for i := 0; i < len(stream); i++ {
 		curr_id := strings.Split(stream[i].id, "-")
+		fmt.Printf("curr_id[0] = %s start_id[0] = %s curr_id[1] = %s start_id[1] = %s\n", curr_id[0], start_id[0], curr_id[1], start_id[1])
+		fmt.Printf("curr_id[0] = %s end_id[0] = %s curr_id[1] = %s end_id[1] = %s\n", curr_id[0], end_id[0], curr_id[1], end_id[1])
 		if curr_id[0] > start_id[0] || (curr_id[0] == start_id[0] && curr_id[1] >= start_id[1]) {
-			if curr_id[0] < end_id[0] || (curr_id[0] == start_id[0] && curr_id[1] <= end_id[1]) {
+			if curr_id[0] < end_id[0] || (curr_id[0] == end_id[0] && curr_id[1] <= end_id[1]) {
 				rangeStreams = append(rangeStreams, *stream[i])
 			}
 		}

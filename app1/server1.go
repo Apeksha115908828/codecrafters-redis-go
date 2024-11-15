@@ -510,19 +510,37 @@ func (server *Server) handleXRANGE(request []string) (string, error) {
 		fmt.Printf("For * Generated id = %s", timestampStr)
 		upper = timestampStr + "-0"
 	}
+
 	streams := server.storage.getAllKVsInRangeStream(key, lower, upper)
-	response := "*" + strconv.Itoa(len(streams)) + "\r\n"
+	fmt.Printf("Length of streams = %d\n", len(streams))
+	length := strconv.Itoa(len(streams))
+	responses := []string{}
+	// response := fmt.Sprintf("*" + length + "\r\n")
+	responses = append(responses, "*"+length+"\r\n")
+	fmt.Printf("response = %d \n", len(responses))
 	for i := 0; i < len(streams); i++ {
 		stream := streams[i]
-		response += "*2\r\n"
-		response += "$" + strconv.Itoa(len(stream.id)) + "\r\n" + stream.id + "\r\n"
+		// response += "*2\r\n"
+		responses = append(responses, "*2\r\n")
+		// response += fmt.Sprintf("$" + strconv.Itoa(len(stream.id)) + "\r\n" + stream.id + "\r\n")
+		responses = append(responses, "$"+strconv.Itoa(len(stream.id))+"\r\n"+stream.id+"\r\n")
 		num_kvpairs := strconv.Itoa(len(stream.kvpairs))
-		response += "*" + strconv.Itoa(len(num_kvpairs)) + "\r\n" + num_kvpairs + "\r\n"
+		// response += "*" + strconv.Itoa(len(num_kvpairs)) + "\r\n" + num_kvpairs + "\r\n"
+		responses = append(responses, "*"+num_kvpairs+"\r\n")
 		for key, value := range stream.kvpairs {
-			response += "$" + strconv.Itoa(len(key)) + "\r\n" + key + "\r\n"
-			response += "$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n"
+			// response += fmt.Sprintf("$" + strconv.Itoa(len(key)) + "\r\n" + key + "\r\n")
+			responses = append(responses, "$"+strconv.Itoa(len(key))+"\r\n"+key+"\r\n")
+			// response += fmt.Sprintf("$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
+			responses = append(responses, "$"+strconv.Itoa(len(value))+"\r\n"+value+"\r\n")
 		}
+		fmt.Printf("response = %s \n", responses[len(responses)-1])
 	}
+
+	response := ""
+	for i := 0; i < len(responses); i++ {
+		response += responses[i]
+	}
+	fmt.Printf("response = %s \n", response)
 	return response, nil
 }
 
