@@ -883,6 +883,7 @@ func (server *Server) handle() {
 					fmt.Printf("error writing to the conn %v \n", err)
 				}
 			}
+			server.isqueuing = false
 			err = server.handleDiscard()
 		default:
 			if server.isqueuing {
