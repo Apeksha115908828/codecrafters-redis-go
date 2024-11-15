@@ -460,6 +460,15 @@ func (server *Server) handleIncr(key string) (string, error) {
 	return fmt.Sprintf(":" + strconv.Itoa(valueint) + "\r\n"), nil
 }
 
+func (server *Server) handleType(key string) (string, error) {
+	value, err := server.storage.GetFromDataBase(key)
+	if err != nil {
+		return "+none\r\n", nil
+	}
+	fmt.Printf("got value = %s from database", *value)
+	return "+string\r\n", nil
+}
+
 const (
 	dbStartKey         byte = 0xFE
 	metadataStartKey   byte = 0xFA
@@ -825,6 +834,11 @@ func (server *Server) handleRequest(request []string, offset int) (string, int, 
 			fmt.Printf("%s Command expects an argument\n", request[0])
 		}
 		response, err = server.handleIncr(request[1])
+	case "TYPE":
+		if len(request) != 2 {
+			fmt.Printf("%s Command expects an argument\n", request[0])
+		}
+		response, err = server.handleType(request[1])
 	default:
 		//handle default
 	}
