@@ -548,9 +548,11 @@ func (server *Server) handleXRANGE(request []string) (string, error) {
 }
 
 func (server *Server) handleXREAD(request []string) (string, error) {
+	prev_entries := 0
 	if request[0] == "block" {
 		blockTime, _ := strconv.Atoi(request[1])
 		fmt.Printf("blockTime = %d\n", blockTime)
+		prev_entries = len(server.storage.stream[request[3]])
 		if blockTime == 0 {
 			server.mc.wg = &sync.WaitGroup{}
 			server.mc.wg.Add(1)
@@ -567,7 +569,6 @@ func (server *Server) handleXREAD(request []string) (string, error) {
 		} else {
 			time.Sleep(time.Duration(blockTime) * time.Millisecond)
 		}
-
 		request = request[2:]
 	}
 	fmt.Println("got past the block")
@@ -589,6 +590,14 @@ func (server *Server) handleXREAD(request []string) (string, error) {
 		for j := 0; j < num_streams; j++ {
 			key := keys[j]
 			id := ids[j]
+			fmt.Printf("prev_entries = %d\n", prev_entries)
+			if id == "$" {
+				new_entries := len(server.storage.stream[key])
+				if prev_entries == new_entries {
+					return "$-1\r\n", nil
+				}
+				id = server.storage.stream[key][prev_entries-1-(prev_entries-new_entries)].id
+			}
 			// if strings.Contains(id, "*") {
 			// 	id = server.storage.autoGenerateID(key, id)
 			// 	fmt.Printf("generated id = %s", id)
