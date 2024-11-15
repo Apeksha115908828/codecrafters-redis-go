@@ -51,58 +51,66 @@ func (store *Storage) findKeyInStream(key string) bool {
 }
 
 func (store *Storage) autoGenerateID(key string, id string) string {
+	if id == "*" {
+		currentTime := time.Now()
+		unixTimestampMillis := currentTime.UnixNano() / int64(time.Millisecond)
+		timestampStr := strconv.FormatInt(unixTimestampMillis, 10)
+		fmt.Printf("For * Generated id = %s", timestampStr)
+		return timestampStr + "-0"
+	}
 	stream, ok := store.stream[key]
 	if !ok {
-		if id == "*" {
-			return "0-1"
+		major_version := strings.Split(id, "-")[0]
+		if major_version == "0" {
+			return major_version + "-1"
 		} else {
-			major_version := strings.Split(id, "-")[0]
-			if major_version == "0" {
-				return major_version + "-1"
-			} else {
-				return major_version + "-0"
-			}
+			return major_version + "-0"
 		}
 	}
 
 	// partial
-	if id == "*" {
-		max_id := strings.Split(stream[0].id, "-")
-		for i := 1; i < len(stream); i++ {
-			curr_id := strings.Split(stream[i].id, "-")
-			if curr_id[0] > max_id[0] {
-				max_id = curr_id
-			} else if curr_id[0] == max_id[0] && curr_id[1] > max_id[1] {
-				max_id = curr_id
-			}
-		}
-		minor, err := strconv.Atoi(max_id[1])
-		if err != nil {
-			fmt.Printf("Error using Atoi %v \n", err)
-		}
-		return max_id[0] + "-" + strconv.Itoa(minor+1)
-	} else {
-		curr_major := strings.Split(id, "-")[0]
-		curr_minor := "0"
-		fmt.Printf("curr_major = %s curr_minor = %s\n", curr_major, curr_minor)
-		for i := 0; i < len(stream); i++ {
-			curr_id := strings.Split(stream[i].id, "-")
-			if curr_id[0] == curr_major {
-				if curr_id[1] >= curr_minor {
-					minor, err := strconv.Atoi(curr_id[1])
-					if err != nil {
-						fmt.Printf("Error using Atoi %v \n", err)
-					}
-					curr_minor = strconv.Itoa(minor + 1)
-					fmt.Printf("curr_major = %s curr_minor = %s\n", curr_major, curr_minor)
+	// if id == "*" {
+	// 	// max_id := strings.Split(stream[0].id, "-")
+	// 	// for i := 1; i < len(stream); i++ {
+	// 	// 	curr_id := strings.Split(stream[i].id, "-")
+	// 	// 	if curr_id[0] > max_id[0] {
+	// 	// 		max_id = curr_id
+	// 	// 	} else if curr_id[0] == max_id[0] && curr_id[1] > max_id[1] {
+	// 	// 		max_id = curr_id
+	// 	// 	}
+	// 	// }
+	// 	// minor, err := strconv.Atoi(max_id[1])
+	// 	// if err != nil {
+	// 	// 	fmt.Printf("Error using Atoi %v \n", err)
+	// 	// }
+	// 	// return max_id[0] + "-" + strconv.Itoa(minor+1)
+	// 	currentTime := time.Now()
+	// 	unixTimestampMillis := currentTime.UnixNano() / int64(time.Millisecond)
+	// 	timestampStr := strconv.FormatInt(unixTimestampMillis, 10)
+	// 	fmt.Printf("For * Generated id = %s", timestampStr)
+	// 	return timestampStr + "-0"
+	// } else {
+	curr_major := strings.Split(id, "-")[0]
+	curr_minor := "0"
+	fmt.Printf("curr_major = %s curr_minor = %s\n", curr_major, curr_minor)
+	for i := 0; i < len(stream); i++ {
+		curr_id := strings.Split(stream[i].id, "-")
+		if curr_id[0] == curr_major {
+			if curr_id[1] >= curr_minor {
+				minor, err := strconv.Atoi(curr_id[1])
+				if err != nil {
+					fmt.Printf("Error using Atoi %v \n", err)
 				}
+				curr_minor = strconv.Itoa(minor + 1)
+				fmt.Printf("curr_major = %s curr_minor = %s\n", curr_major, curr_minor)
 			}
 		}
-		if curr_major == "0" && curr_minor == "0" {
-			return "0-1"
-		}
-		return curr_major + "-" + curr_minor
 	}
+	if curr_major == "0" && curr_minor == "0" {
+		return "0-1"
+	}
+	return curr_major + "-" + curr_minor
+	// }
 }
 
 func (store *Storage) checkIDValidity(key string, id string) (string, bool) {
