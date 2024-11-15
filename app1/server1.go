@@ -596,7 +596,7 @@ func (server *Server) handleXREAD(request []string) (string, error) {
 				if prev_entries == new_entries {
 					return "$-1\r\n", nil
 				}
-				id = server.storage.stream[key][prev_entries-1-(prev_entries-new_entries)].id
+				id = server.storage.stream[key][prev_entries-1-(prev_entries-new_entries)-1].id
 			}
 			// if strings.Contains(id, "*") {
 			// 	id = server.storage.autoGenerateID(key, id)
