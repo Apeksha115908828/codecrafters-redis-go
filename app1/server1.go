@@ -147,15 +147,16 @@ func (conn *Connection) Read() (int, []string, error) {
 	}
 	return offset, request, nil
 }
-func (server *Server) handlePing() error {
+func (server *Server) handlePing() (string, error) {
 	if server.opts.Role == "master" {
-		_, err := server.conn.conn.Write([]byte("+PONG\r\n"))
-		if err != nil {
-			return fmt.Errorf("HandlePing::Write to connection failed with %v", err)
-		}
-		return nil
+		// _, err := server.conn.conn.Write([]byte("+PONG\r\n"))
+		return fmt.Sprintf("+PONG\r\n"), nil
+		// if err != nil {
+		// 	return fmt.Errorf("HandlePing::Write to connection failed with %v", err)
+		// }
+		// return nil
 	}
-	return nil
+	return "", nil
 	// return fmt.Errorf("PING received on non master node")
 }
 
@@ -163,66 +164,72 @@ func EncodeBulkString(str string) string {
 	return fmt.Sprintf("$%d\r\n%s\r\n", len(str), str)
 }
 
-func (server *Server) handleEcho(message string) error {
-	_, err := server.conn.conn.Write([]byte(EncodeBulkString(message)))
-	if err != nil {
-		return fmt.Errorf("echo failed to write with %v", err)
-	}
-	return nil
+func (server *Server) handleEcho(message string) (string, error) {
+	// _, err := server.conn.conn.Write([]byte(EncodeBulkString(message)))
+	return fmt.Sprintf(EncodeBulkString(message)), nil
+	// if err != nil {
+	// 	return fmt.Errorf("echo failed to write with %v", err)
+	// }
+	// return nil
 }
 
-func (server *Server) handleInfo(argument string) error {
+func (server *Server) handleInfo(argument string) (string, error) {
 	var info strings.Builder
 	if argument != "replication" {
-		return fmt.Errorf("error: incorrect arguments")
+		return "", fmt.Errorf("error: incorrect arguments")
 	}
 	info.WriteString("# Replication\r\n")
 	info.WriteString("role:" + server.opts.Role + "\r\n")
 	info.WriteString("master_replid:" + server.opts.ReplicaId + "\r\n")
 	info.WriteString("master_repl_offset:" + strconv.FormatInt(int64(server.mc.propOffset), 10) + "\r\n")
-	_, err := server.conn.conn.Write([]byte(EncodeBulkString(info.String())))
-	if err != nil {
-		return fmt.Errorf("write to connection failed with %v", err)
-	}
-	return nil
+	// _, err := server.conn.conn.Write([]byte(EncodeBulkString(info.String())))
+	return fmt.Sprintf(EncodeBulkString(info.String())), nil
+	// if err != nil {
+	// 	return fmt.Errorf("write to connection failed with %v", err)
+	// }
+	// return nil
 }
 
-func (server *Server) handlePsync(request []string) error {
+func (server *Server) handlePsync(request []string) (string, error) {
 	emptyrdb, err := hex.DecodeString("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2")
 	if err != nil {
-		return fmt.Errorf("wrror while decoding the hex string with rdb file content")
+		return "", fmt.Errorf("wrror while decoding the hex string with rdb file content")
 	}
+	response := ""
 	if request[0] == "?" {
 		// initially the offset will be zero
 		// _, err =server.conn.conn.Write([]byte(EncodeBulkString(string("FULLRESYNC " + server.opts.ReplicaId + " " + strconv.Itoa(server.mc.propOffset)))))
-		_, err = server.conn.conn.Write([]byte(string("+FULLRESYNC " + server.opts.ReplicaId + " 0\r\n")))
-		if err != nil {
-			return fmt.Errorf("write to connection failed with %v", err)
-		}
+		// _, err = server.conn.conn.Write([]byte(string("+FULLRESYNC " + server.opts.ReplicaId + " 0\r\n")))
+		response = fmt.Sprintf(string("+FULLRESYNC " + server.opts.ReplicaId + " 0\r\n"))
+		// if err != nil {
+		// 	return "", fmt.Errorf("write to connection failed with %v", err)
+		// }
 	}
-	_, err = server.conn.conn.Write([]byte("$" + strconv.Itoa(len(emptyrdb)) + "\r\n" + string(emptyrdb)))
+	// _, err = server.conn.conn.Write([]byte("$" + strconv.Itoa(len(emptyrdb)) + "\r\n" + string(emptyrdb)))
+	response += fmt.Sprintf("$" + strconv.Itoa(len(emptyrdb)) + "\r\n" + string(emptyrdb))
 	// _, err =server.conn.conn.Write([]byte(EncodeBulkString(string(emptyrdb))))
-	if err != nil {
-		return fmt.Errorf("write to connection failed with %v", err)
-	}
+	// if err != nil {
+	// 	return fmt.Errorf("write to connection failed with %v", err)
+	// }
 	//Add yo slaves
 	fmt.Println("Adding to the slaves......")
 	server.mc.slaves.AddToSlaves(server.conn.conn.RemoteAddr(), server.conn)
-	return nil
+	return response, nil
 }
 
-func (server *Server) handleReplconf(request []string) error {
+func (server *Server) handleReplconf(request []string) (string, error) {
 	fmt.Println("got handleReplconf......")
+	response := ""
 	switch strings.ToUpper(request[0]) {
 	case "ACK":
 		// For the master
 		ack, err := strconv.Atoi(request[1])
 		if err != nil {
-			return fmt.Errorf("error with strconv.Atoi %v", err)
+			return "", fmt.Errorf("error with strconv.Atoi %v", err)
 		}
 		err = server.mc.slaves.HandleAck(server.conn.conn.RemoteAddr(), ack)
 		if err != nil {
-			return fmt.Errorf("ack handling failed with error %v", err)
+			return "", fmt.Errorf("ack handling failed with error %v", err)
 		}
 		if server.mc.wg != nil {
 			fmt.Println("sending done on waitgroup......")
@@ -232,22 +239,23 @@ func (server *Server) handleReplconf(request []string) error {
 		// For the slaves
 		offset := server.conn.offset
 		fmt.Println("Responding to the getAck command......")
-		response := fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%d\r\n", len(strconv.Itoa(offset)), offset)
-		_, err := server.conn.conn.Write([]byte(response))
-		if err != nil {
-			return fmt.Errorf("send ACK failed with error %v", err)
-		}
+		response = fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%d\r\n", len(strconv.Itoa(offset)), offset)
+		// _, err := server.conn.conn.Write([]byte(response))
+		// if err != nil {
+		// 	return "", fmt.Errorf("send ACK failed with error %v", err)
+		// }
 		server.conn.offset += 37
 	default:
-		_, err := server.conn.conn.Write([]byte("+OK\r\n"))
-		if err != nil {
-			return fmt.Errorf("error writing to connection %v", err)
-		}
+		response = fmt.Sprintf("+OK\r\n")
+		// _, err := server.conn.conn.Write([]byte("+OK\r\n"))
+		// if err != nil {
+		// 	return fmt.Errorf("error writing to connection %v", err)
+		// }
 	}
-	return nil
+	return response, nil
 }
 
-func (server *Server) handleGet(request []string) error {
+func (server *Server) handleGet(request []string) (string, error) {
 	value, err := server.storage.GetFromDataBase(request[0])
 	var response string
 	if err != nil {
@@ -255,11 +263,11 @@ func (server *Server) handleGet(request []string) error {
 	} else {
 		response = EncodeBulkString(*value)
 	}
-	_, err = server.conn.conn.Write([]byte(response))
-	if err != nil {
-		return fmt.Errorf("connection write failed with %v ", err)
-	}
-	return nil
+	// _, err = server.conn.conn.Write([]byte(response))
+	// if err != nil {
+	// 	return "", fmt.Errorf("connection write failed with %v ", err)
+	// }
+	return fmt.Sprintf(response), nil
 }
 
 // TODO: Check again below 2 functions
@@ -274,7 +282,7 @@ func ToRespArray(arr []string) string {
 
 	return respArr
 }
-func (server *Server) handleSet(request []string) error {
+func (server *Server) handleSet(request []string) (string, error) {
 	// EX for second, PX for milli second
 	key := request[0]
 	value := request[1]
@@ -289,12 +297,13 @@ func (server *Server) handleSet(request []string) error {
 	}
 	server.storage.AddToDataBase(key, value, expiry)
 	if server.opts.Role == "master" {
-		_, err := server.conn.conn.Write([]byte("+OK\r\n"))
-		if err != nil {
-			return fmt.Errorf("writing to connection failed with error %v", err)
-		}
+		// _, err := server.conn.conn.Write([]byte("+OK\r\n"))
+		// if err != nil {
+		// 	return fmt.Errorf("writing to connection failed with error %v", err)
+		// }
+		return "+OK\r\n", nil
 	}
-	return nil
+	return "", nil
 }
 
 // TODO: Should we keep this or move it somewhere else??
@@ -319,34 +328,34 @@ func (slaves *Slaves) getSynchronizedSlavesCount(server *Server) (int, error) {
 	return count, nil
 }
 
-func (server *Server) handleWait(request []string) error {
+func (server *Server) handleWait(request []string) (string, error) {
 	numReplicas, err := strconv.Atoi(request[0])
 	if err != nil {
-		return fmt.Errorf("atoi fialed with error %v", err)
+		return "", fmt.Errorf("atoi fialed with error %v", err)
 	}
 
 	timeout, err := strconv.Atoi(request[1])
 	// timeout /= 10
 
 	if err != nil {
-		return fmt.Errorf("atoi failed with error %v", err)
+		return "", fmt.Errorf("atoi failed with error %v", err)
 	}
 
 	syncCount, err := server.mc.slaves.getSynchronizedSlavesCount(server)
 	if err != nil {
-		return fmt.Errorf("syncCount failed with error %v", err)
+		return "", fmt.Errorf("syncCount failed with error %v", err)
 	}
 
 	if syncCount == server.mc.slaves.Count() {
-		server.conn.conn.Write([]byte(":" + strconv.Itoa(server.mc.slaves.Count()) + "\r\n"))
-		return nil
+		// server.conn.conn.Write([]byte(":" + strconv.Itoa(server.mc.slaves.Count()) + "\r\n"))
+		return fmt.Sprintf(":" + strconv.Itoa(server.mc.slaves.Count()) + "\r\n"), nil
 	}
 	server.mc.slaves.lock.RLock()
 	for _, slave := range server.mc.slaves.list {
 		_, err = slave.conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n"))
 		if err != nil {
 			server.mc.slaves.lock.RUnlock()
-			return fmt.Errorf("error while writing to connection %v", err)
+			return "", fmt.Errorf("error while writing to connection %v", err)
 		}
 	}
 	server.mc.slaves.lock.RUnlock()
@@ -367,61 +376,62 @@ func (server *Server) handleWait(request []string) error {
 
 	syncCount, err = server.mc.slaves.getSynchronizedSlavesCount(server)
 	if err != nil {
-		return fmt.Errorf("getSynchronizedSlavesCount failed with %v", err)
+		return "", fmt.Errorf("getSynchronizedSlavesCount failed with %v", err)
 	}
-	_, err = server.conn.conn.Write([]byte(":" + strconv.Itoa(syncCount) + "\r\n"))
-	if err != nil {
-		return fmt.Errorf("write to conn failed with %v", err)
-	}
+	// _, err = server.conn.conn.Write([]byte(":" + strconv.Itoa(syncCount) + "\r\n"))
+	// if err != nil {
+	// 	return fmt.Sprintf(":" + strconv.Itoa(syncCount) + "\r\n"), fmt.Errorf("write to conn failed with %v", err)
+	// }
 	server.mc.propOffset += 37
-	return nil
+	return fmt.Sprintf(":" + strconv.Itoa(syncCount) + "\r\n"), nil
 }
 
-func (server *Server) handleConfig(request []string) error {
+func (server *Server) handleConfig(request []string) (string, error) {
+	response := ""
 	switch strings.ToUpper(request[0]) {
 	case "GET":
 		query := request[1]
 		if query == "dir" {
-			_, err := server.conn.conn.Write([]byte("*2\r\n" + EncodeBulkString("dir") + EncodeBulkString(server.opts.Dir)))
-			if err != nil {
-				return fmt.Errorf("config handling failed with %v", err)
-			}
+			// _, err := server.conn.conn.Write([]byte("*2\r\n" + EncodeBulkString("dir") + EncodeBulkString(server.opts.Dir)))
+			// if err != nil {
+			// 	return "", fmt.Errorf("config handling failed with %v", err)
+			// }
+			return fmt.Sprintf("*2\r\n" + EncodeBulkString("dir") + EncodeBulkString(server.opts.Dir)), nil
 		} else if query == "dbfilename" {
-			_, err := server.conn.conn.Write([]byte("*2\r\n" + EncodeBulkString("dbfilename") + EncodeBulkString(server.opts.DbFileName)))
-			if err != nil {
-				return fmt.Errorf("config handling failed with %v", err)
-			}
+			// _, err := server.conn.conn.Write([]byte("*2\r\n" + EncodeBulkString("dbfilename") + EncodeBulkString(server.opts.DbFileName)))
+			// if err != nil {
+			// 	return "", fmt.Errorf("config handling failed with %v", err)
+			// }
+			return fmt.Sprintf("*2\r\n" + EncodeBulkString("dbfilename") + EncodeBulkString(server.opts.DbFileName)), nil
 		}
 	}
-	return nil
+	return response, nil
 }
 
-func (server *Server) handleKeys(key string) error {
+func (server *Server) handleKeys(key string) (string, error) {
 	if key == "*" {
 		keys, err := server.storage.getAllKeysFromRDB()
 		if err != nil {
-			return fmt.Errorf("error getting keys: %v", err)
+			return "", fmt.Errorf("error getting keys: %v", err)
 		}
 		fmt.Printf("number of keys = %d", len(keys))
 		outputstring := ""
 		for key_i := range len(keys) {
 			outputstring += EncodeBulkString(keys[key_i])
 		}
-		// _, err = server.conn.conn.Write([]byte("*" + string(len(keys)) + "\r\n" + outputstring))
-		_, err = server.conn.conn.Write([]byte(ToRespArray(keys)))
-		return err
+		return fmt.Sprintf(ToRespArray(keys)), err
 	} else {
-		return fmt.Errorf("command %s not supported", key)
+		return "", fmt.Errorf("command %s not supported", key)
 	}
 }
 
-func (server *Server) handleIncr(key string) error {
+func (server *Server) handleIncr(key string) (string, error) {
 	fmt.Println("HandleIncr called for key = ", key)
 	// var value string = ""
 	var valueint int = 0
 	val, err := server.storage.GetFromDataBase(key)
 	if err != nil {
-		fmt.Println("Error getting value from store", valueint)
+		fmt.Println("Value not present in the database", valueint)
 		// server.storage.AddToDataBase(key, string(1), time.Time{})
 		// value = "0"
 	} else {
@@ -429,11 +439,12 @@ func (server *Server) handleIncr(key string) error {
 		fmt.Printf("calling strconv on val %s\n", value)
 		valueint, err = strconv.Atoi(value)
 		if err != nil {
-			_, err = server.conn.conn.Write([]byte("-ERR value is not an integer or out of range\r\n"))
-			if err != nil {
-				return fmt.Errorf("error writing to conn %v", err)
-			}
-			return fmt.Errorf("error while converting the value to string")
+			// _, err = server.conn.conn.Write([]byte("-ERR value is not an integer or out of range\r\n"))
+			// if err != nil {
+			// 	return fmt.Errorf("error writing to conn %v", err)
+			// }
+			// return fmt.Errorf("error while converting the value to string")
+			return fmt.Sprintf("-ERR value is not an integer or out of range\r\n"), nil
 		}
 	}
 	fmt.Println("Got value for key = ", valueint)
@@ -441,12 +452,12 @@ func (server *Server) handleIncr(key string) error {
 
 	valueint += 1
 	server.storage.AddToDataBase(key, strconv.Itoa(valueint), time.Time{})
-	_, err = server.conn.conn.Write([]byte(":" + strconv.Itoa(valueint) + "\r\n"))
-	if err != nil {
-		return fmt.Errorf("error writing to conn %v", err)
-	}
+	// _, err = server.conn.conn.Write([]byte(":" + strconv.Itoa(valueint) + "\r\n"))
+	// if err != nil {
+	// 	return "", fmt.Errorf("error writing to conn %v", err)
+	// }
 
-	return nil
+	return fmt.Sprintf(":" + strconv.Itoa(valueint) + "\r\n"), nil
 }
 
 const (
@@ -540,11 +551,40 @@ func parseLength(length byte, reader *bufio.Reader) (int, error) {
 }
 
 func (server *Server) handleMulti() error {
+
 	_, err := server.conn.conn.Write([]byte("+OK\r\n"))
 	return err
 }
 
-func (server *Server) handleExec() error {
+func (server *Server) handleExec(offset int) error {
+	// currQueue := server.queue[length-1]
+	responses := []string{}
+	fmt.Printf("num of command to execute = %d", len(server.queue))
+	for index := range server.queue {
+		entry := server.queue[index]
+		response, offset, err := server.handleRequest(entry, offset)
+		if err != nil {
+			fmt.Println("error occurred with this command", entry[0])
+			// if response != "" {
+			// 	responses = append(responses, response)
+			// }
+			continue
+		}
+
+		responses = append(responses, response)
+		fmt.Printf("got offset = %d and request = %s response = %s \n", offset, entry[0], response)
+	}
+	server.queue = make([][]string, 0)
+	fmt.Printf("num of responses = %d", len(responses))
+	resp := fmt.Sprintf("*%d\r\n", len(responses))
+	for _, s := range responses {
+		// resp += responses[index]
+		resp += s
+	}
+	_, err := server.conn.conn.Write([]byte(resp))
+	if err != nil {
+		return fmt.Errorf("error writing to the conn")
+	}
 	return nil
 }
 
@@ -706,11 +746,12 @@ func (server *Server) parseString(b byte, reader *bufio.Reader) (string, error) 
 	return string(str[:n]), nil
 }
 
-func (server *Server) handleRequest(request []string, offset int) (int, error) {
+func (server *Server) handleRequest(request []string, offset int) (string, int, error) {
 	var err error
+	response := ""
 	switch strings.ToUpper(request[0]) {
 	case "PING":
-		err = server.handlePing()
+		response, err = server.handlePing()
 		offset = 14
 	case "REPLCONF":
 		fmt.Println("got REPLCONF......")
@@ -718,27 +759,27 @@ func (server *Server) handleRequest(request []string, offset int) (int, error) {
 			fmt.Println("Ill formed command REPLCONF")
 			break
 		}
-		err = server.handleReplconf(request[1:])
+		response, err = server.handleReplconf(request[1:])
 		//handle replconf
 	case "PSYNC":
 		if len(request) != 3 {
 			fmt.Println("Ill formed command PSYNC")
 			break
 		}
-		err = server.handlePsync(request[1:])
+		response, err = server.handlePsync(request[1:])
 		//handle psync
 	case "ECHO":
 		if len(request) != 2 {
 			fmt.Printf("%s expects at least 1 argument\n", request[0])
 			break
 		}
-		err = server.handleEcho(request[1])
+		response, err = server.handleEcho(request[1])
 	case "SET":
 		if len(request) < 2 {
 			fmt.Println("Ill formed command SET")
 			break
 		}
-		err = server.handleSet(request[1:])
+		response, err = server.handleSet(request[1:])
 		fmt.Println("Handled Set on master........")
 		if server.opts.Role == "master" {
 			server.mc.slaves.lock.RLock()
@@ -756,38 +797,38 @@ func (server *Server) handleRequest(request []string, offset int) (int, error) {
 			fmt.Println("Ill formed command GET")
 			break
 		}
-		err = server.handleGet(request[1:])
+		response, err = server.handleGet(request[1:])
 	case "INFO":
 		if len(request) != 2 {
 			fmt.Printf("%s expects at least 1 argument \n", request[0])
 			break
 		}
-		err = server.handleInfo(request[1])
+		response, err = server.handleInfo(request[1])
 	case "WAIT":
 		//handle wait
 		waitLock.Lock()
-		err = server.handleWait(request[1:])
+		response, err = server.handleWait(request[1:])
 		waitLock.Unlock()
 	case "CONFIG":
 		if len(request) != 3 {
 			fmt.Println("Ill formed command", request[0])
 			break
 		}
-		err = server.handleConfig(request[1:])
+		response, err = server.handleConfig(request[1:])
 	case "KEYS":
 		if len(request) != 2 {
 			fmt.Printf("%s Command expects an argument\n", request[0])
 		}
-		err = server.handleKeys(request[1])
+		response, err = server.handleKeys(request[1])
 	case "INCR":
 		if len(request) != 2 {
 			fmt.Printf("%s Command expects an argument\n", request[0])
 		}
-		err = server.handleIncr(request[1])
+		response, err = server.handleIncr(request[1])
 	default:
 		//handle default
 	}
-	return offset, err
+	return response, offset, err
 }
 
 func (server *Server) handle() {
@@ -821,22 +862,43 @@ func (server *Server) handle() {
 			}
 			if len(server.queue) == 0 {
 				server.isqueuing = false
-				server.conn.conn.Write([]byte("*0\r\n"))
+				_, err = server.conn.conn.Write([]byte("*0\r\n"))
+				if err != nil {
+					fmt.Printf("error writing to conn %v \n", err)
+				}
 				break
 			}
 			server.isqueuing = false
-			err = server.handleExec()
+			err = server.handleExec(offset)
 		case "DISCARD":
+			if server.isqueuing {
+				_, err := server.conn.conn.Write([]byte("+OK\r\n"))
+				if err != nil {
+					fmt.Printf("error writing to the conn %v \n", err)
+				}
+				server.queue = make([][]string, 0)
+			} else {
+				_, err := server.conn.conn.Write([]byte("-ERR DISCARD without MULTI\r\n"))
+				if err != nil {
+					fmt.Printf("error writing to the conn %v \n", err)
+				}
+			}
 			err = server.handleDiscard()
 		default:
 			if server.isqueuing {
 				server.queue = append(server.queue, request)
 				server.conn.conn.Write([]byte("+QUEUED\r\n"))
 			} else {
-				offset, err = server.handleRequest(request, offset)
+				response, _, err := server.handleRequest(request, offset)
 				if err != nil {
 					return
 				}
+				_, err = server.conn.conn.Write([]byte(response))
+				if err != nil {
+					fmt.Printf("error writing to the conn %v \n", err)
+					return
+				}
+				fmt.Printf("offset = %d request = %s\n", offset, request[0])
 			}
 		}
 
