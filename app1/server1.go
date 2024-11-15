@@ -477,15 +477,20 @@ func (server *Server) handleXADD(request []string) (string, error) {
 
 	key := request[0]
 	id := request[1]
-	kvpairs := make(map[string]string, 0)
-	for i := 2; i < len(request); i++ {
-		key := request[i]
-		value := request[i+1]
-		i += 1
-		kvpairs[key] = value
+	if server.storage.checkIDValidity(key, id) {
+		kvpairs := make(map[string]string, 0)
+		for i := 2; i < len(request); i++ {
+			key := request[i]
+			value := request[i+1]
+			i += 1
+			kvpairs[key] = value
+		}
+		server.storage.AddToStream(key, id, kvpairs)
+		return fmt.Sprintf("$" + strconv.Itoa(len(id)) + "\r\n" + id + "\r\n"), nil
+	} else {
+		return fmt.Sprintf("-ERR The ID specified in XADD must be greater than 0-0\r\n")
 	}
-	server.storage.AddToStream(key, id, kvpairs)
-	return fmt.Sprintf("$" + strconv.Itoa(len(id)) + "\r\n" + id + "\r\n"), nil
+
 }
 
 const (

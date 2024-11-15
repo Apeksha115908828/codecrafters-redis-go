@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -38,10 +39,23 @@ func (store *Storage) AddToStream(key string, id string, stream_vals map[string]
 
 func (store *Storage) findKeyInStream(key string) bool {
 	_, ok := store.stream[key]
+	return ok
+}
+
+func (store *Storage) checkIDValidity(key string, id string) bool {
+	value, ok := store.stream[key]
 	if !ok {
+		return true
+	} else {
+		old_id := strings.Split(value.id, "-")
+		new_id := strings.Split(id, "-")
+		if new_id[0] > old_id[0] {
+			return true
+		} else if new_id[1] > old_id[1] {
+			return true
+		}
 		return false
 	}
-	return true
 }
 
 func (store *Storage) GetFromDataBase(key string) (*string, error) {
