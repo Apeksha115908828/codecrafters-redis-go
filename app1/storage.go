@@ -13,6 +13,11 @@ type DataEntry struct {
 	expiry time.Time
 }
 
+type StreamEntry struct {
+	id      string
+	kvpairs map[string]string
+}
+
 // use ParseDuration to get duration from string
 // func ParseDuration(s string) (Duration, error)
 // ParseDuration parses a duration string. A duration string is a possibly signed sequence of decimal numbers,
@@ -20,7 +25,23 @@ type DataEntry struct {
 // "us" (or "µs"), "ms", "s", "m", "h".
 
 type Storage struct {
-	db map[string]*DataEntry
+	db     map[string]*DataEntry
+	stream map[string]*StreamEntry
+}
+
+func (store *Storage) AddToStream(key string, id string, stream_vals map[string]string) {
+	store.stream[key] = &StreamEntry{
+		id:      id,
+		kvpairs: stream_vals,
+	}
+}
+
+func (store *Storage) findKeyInStream(key string) bool {
+	_, ok := store.stream[key]
+	if !ok {
+		return false
+	}
+	return true
 }
 
 func (store *Storage) GetFromDataBase(key string) (*string, error) {
@@ -81,6 +102,7 @@ func (store *Storage) getAllKeysFromRDB() ([]string, error) {
 func NewStore() *Storage {
 	fmt.Println("Came to create a new store")
 	return &Storage{
-		db: make(map[string]*DataEntry),
+		db:     make(map[string]*DataEntry),
+		stream: make(map[string]*StreamEntry),
 	}
 }

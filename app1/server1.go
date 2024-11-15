@@ -461,12 +461,31 @@ func (server *Server) handleIncr(key string) (string, error) {
 }
 
 func (server *Server) handleType(key string) (string, error) {
+	if server.storage.findKeyInStream(key) {
+		return "+stream\r\n", nil
+	}
 	value, err := server.storage.GetFromDataBase(key)
 	if err != nil {
 		return "+none\r\n", nil
 	}
 	fmt.Printf("got value = %s from database", *value)
 	return "+string\r\n", nil
+}
+
+func (server *Server) handleXADD(request []string) (string, error) {
+	fmt.Printf("len(request) = %d", len(request))
+
+	key := request[0]
+	id := request[1]
+	kvpairs := make(map[string]string, 0)
+	for i := 2; i < len(request); i++ {
+		key := request[i]
+		value := request[i+1]
+		i += 1
+		kvpairs[key] = value
+	}
+	server.storage.AddToStream(key, id, kvpairs)
+	return fmt.Sprintf("$" + strconv.Itoa(len(id)) + "\r\n" + id + "\r\n"), nil
 }
 
 const (
@@ -839,6 +858,11 @@ func (server *Server) handleRequest(request []string, offset int) (string, int, 
 			fmt.Printf("%s Command expects an argument\n", request[0])
 		}
 		response, err = server.handleType(request[1])
+	case "XADD":
+		if len(request) < 4 {
+			fmt.Printf("%s Command expects an argument\n", request[0])
+		}
+		response, err = server.handleXADD(request[1:])
 	default:
 		//handle default
 	}
