@@ -820,6 +820,7 @@ func (server *Server) handle() {
 				break
 			}
 			if len(server.queue) == 0 {
+				server.isqueuing = false
 				server.conn.conn.Write([]byte("*0\r\n"))
 				break
 			}
