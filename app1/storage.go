@@ -225,7 +225,20 @@ func (store *Storage) rpush(elements []string) (int, error) {
 	return len(store.rpush_list), nil
 
 }
-
+func (store *Storage) lrange(lower_s string, upper_s string) ([]string, error) {
+	// TODO: handle strconv.Atoi error here
+	lower, _ := strconv.Atoi(lower_s)
+	upper, _ := strconv.Atoi(upper_s)
+	if lower >= 0 && upper < len(store.rpush_list) {
+		var answer []string
+		for i := lower; i <= upper; i++ {
+			answer = append(answer, store.rpush_list[i])
+		}
+		return answer, nil
+	} else {
+		return nil, fmt.Errorf("not a valid range")
+	}
+}
 func NewStore() *Storage {
 	fmt.Println("Came to create a new store")
 	return &Storage{

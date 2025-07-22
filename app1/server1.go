@@ -471,6 +471,7 @@ func (server *Server) handleType(key string) (string, error) {
 	fmt.Printf("got value = %s from database", *value)
 	return "+string\r\n", nil
 }
+
 func (server *Server) handleRPush(request []string) (string, error) {
 	// for i, req := range request {
 	// 	print("rpush request[%d] = %s", i, req)
@@ -480,6 +481,13 @@ func (server *Server) handleRPush(request []string) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf(":" + strconv.Itoa(listsize) + "\r\n"), nil
+}
+func (server *Server) handleLRange(request []string) (string, error) {
+	list_elements, err := server.storage.lrange(request[1], request[2])
+	if err != nil {
+		return "", err
+	}
+	return ToRespArray(list_elements), nil
 }
 func (server *Server) handleXADD(request []string) (string, error) {
 	fmt.Printf("len(request) = %d", len(request))
@@ -1040,11 +1048,17 @@ func (server *Server) handleRequest(request []string, offset int) (string, int, 
 		response, err = server.handleType(request[1])
 
 	case "RPUSH":
-		if len(request) != 3 {
+		if len(request) < 3 {
 			fmt.Printf("%s Command expects an argument\n", request[0])
 			break
 		}
 		response, err = server.handleRPush(request[1:])
+	case "LRANGE":
+		if len(request) != 4 {
+			fmt.Printf("%s Command expects an argument\n", request[0])
+			break
+		}
+		response, err = server.handleLRange(request[1:])
 	case "XADD":
 		if len(request) < 4 {
 			fmt.Printf("%s Command expects an argument\n", request[0])
