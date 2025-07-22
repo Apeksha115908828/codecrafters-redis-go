@@ -498,13 +498,13 @@ func (server *Server) handleLRange(request []string) (string, error) {
 	}
 	return ToRespArray(list_elements), nil
 }
-func (server *Server) handleLLen(key string) (int, error) {
+func (server *Server) handleLLen(key string) (string, error) {
 	llen, err := server.storage.llen(key)
 	if err != nil {
 		fmt.Println("........error in llen = ", err)
-		return 0, nil
+		return ":0\r\n", nil
 	}
-	return llen, nil
+	return fmt.Sprintf(":" + strconv.Itoa(llen) + "\r\n"), nil
 }
 func (server *Server) handleXADD(request []string) (string, error) {
 	fmt.Printf("len(request) = %d", len(request))
