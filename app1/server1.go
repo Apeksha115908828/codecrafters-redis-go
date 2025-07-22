@@ -518,7 +518,7 @@ func (server *Server) handlelpop(key string) (string, error) {
 func (server *Server) handleMultiPop(key string, count string) (string, error) {
 	pop_element, err := server.storage.multilpop(key, count)
 	if err != nil {
-		return "$-1\r\n", nil
+		return "*0\r\n", nil
 	}
 	return ToRespArray(pop_element), nil
 }

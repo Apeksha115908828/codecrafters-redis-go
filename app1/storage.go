@@ -262,7 +262,7 @@ func (store *Storage) multilpop(key string, count_s string) ([]string, error) {
 	}
 	count, _ := strconv.Atoi(count_s)
 	count = min(count, len(store.rpush_list[key]))
-	answer := store.rpush_list[key][0 : count-1]
+	answer := store.rpush_list[key][0:count]
 	if count == len(store.rpush_list[key]) {
 		delete(store.rpush_list, key)
 	} else {
