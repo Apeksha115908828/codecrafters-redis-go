@@ -27,8 +27,9 @@ type StreamEntry struct {
 // "us" (or "µs"), "ms", "s", "m", "h".
 
 type Storage struct {
-	db     map[string]*DataEntry
-	stream map[string][]*StreamEntry
+	db         map[string]*DataEntry
+	stream     map[string][]*StreamEntry
+	rpush_list []string
 }
 
 func (store *Storage) AddToStream(key string, id string, stream_vals map[string]string) string {
@@ -217,10 +218,19 @@ func (store *Storage) getAllKeysFromRDB() ([]string, error) {
 	return keys, nil
 }
 
+func (store *Storage) rpush(elements []string) (int, error) {
+	// for _, element := range elements {
+	storage.rpush_list = append(storage.rpush_list, elements...)
+	// }
+	return len(store.rpush_list), nil
+
+}
+
 func NewStore() *Storage {
 	fmt.Println("Came to create a new store")
 	return &Storage{
-		db:     make(map[string]*DataEntry),
-		stream: make(map[string][]*StreamEntry),
+		db:         make(map[string]*DataEntry),
+		stream:     make(map[string][]*StreamEntry),
+		rpush_list: []string{},
 	}
 }

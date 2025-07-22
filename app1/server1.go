@@ -471,7 +471,16 @@ func (server *Server) handleType(key string) (string, error) {
 	fmt.Printf("got value = %s from database", *value)
 	return "+string\r\n", nil
 }
-
+func (server *Server) handleRPush(request []string) (string, error) {
+	// for i, req := range request {
+	// 	print("rpush request[%d] = %s", i, req)
+	// }
+	listsize, err := server.storage.rpush(request[1:])
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf(":" + strconv.Itoa(listsize) + "\r\n"), nil
+}
 func (server *Server) handleXADD(request []string) (string, error) {
 	fmt.Printf("len(request) = %d", len(request))
 
@@ -520,17 +529,18 @@ func (server *Server) handleXRANGE(request []string) (string, error) {
 	responses := []string{}
 	// response := fmt.Sprintf("*" + length + "\r\n")
 	responses = append(responses, "*"+length+"\r\n")
-	fmt.Printf("response = %d \n", len(responses))
+	fmt.Printf("response, length = %d \n", len(responses))
 	for i := 0; i < len(streams); i++ {
 		stream := streams[i]
 		// response += "*2\r\n"
 		responses = append(responses, "*2\r\n")
 		// response += fmt.Sprintf("$" + strconv.Itoa(len(stream.id)) + "\r\n" + stream.id + "\r\n")
 		responses = append(responses, "$"+strconv.Itoa(len(stream.id))+"\r\n"+stream.id+"\r\n")
-		num_kvpairs := strconv.Itoa(len(stream.kvpairs))
+		num_kvpairs := strconv.Itoa(2 * len(stream.kvpairs))
 		// response += "*" + strconv.Itoa(len(num_kvpairs)) + "\r\n" + num_kvpairs + "\r\n"
 		responses = append(responses, "*"+num_kvpairs+"\r\n")
 		for key, value := range stream.kvpairs {
+			// fmt.Printf("For id = %s, key = %s, value = %s", stream.id, key, value)
 			// response += fmt.Sprintf("$" + strconv.Itoa(len(key)) + "\r\n" + key + "\r\n")
 			responses = append(responses, "$"+strconv.Itoa(len(key))+"\r\n"+key+"\r\n")
 			// response += fmt.Sprintf("$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
@@ -1028,6 +1038,13 @@ func (server *Server) handleRequest(request []string, offset int) (string, int, 
 			break
 		}
 		response, err = server.handleType(request[1])
+
+	case "RPUSH":
+		if len(request) != 3 {
+			fmt.Printf("%s Command expects an argument\n", request[0])
+			break
+		}
+		response, err = server.handleRPush(request[1:])
 	case "XADD":
 		if len(request) < 4 {
 			fmt.Printf("%s Command expects an argument\n", request[0])
