@@ -220,12 +220,31 @@ func (store *Storage) getAllKeysFromRDB() ([]string, error) {
 }
 
 func (store *Storage) rpush(key string, elements []string) (int, error) {
-	// for _, element := range elements {
 	store.rpush_list[key] = append(store.rpush_list[key], elements...)
-	// }
 	return len(store.rpush_list[key]), nil
-
 }
+
+func (store *Storage) lpush(key string, elements []string) (int, error) {
+	reverse(elements)
+	store.rpush_list[key] = append(elements, store.rpush_list[key]...)
+	return len(store.rpush_list[key]), nil
+}
+
+func reverse(s []string) {
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		s[i], s[j] = s[j], s[i]
+	}
+}
+
+func (store *Storage) llen(key string) (int, error) {
+	_, ok := store.rpush_list[key]
+	if !ok {
+		// var answer []string
+		return 0, fmt.Errorf("key missing")
+	}
+	return len(store.rpush_list[key]), nil
+}
+
 func (store *Storage) lrange(key string, lower_s string, upper_s string) ([]string, error) {
 	// TODO: handle strconv.Atoi error here
 	lower, _ := strconv.Atoi(lower_s)
@@ -240,8 +259,14 @@ func (store *Storage) lrange(key string, lower_s string, upper_s string) ([]stri
 	if lower < 0 {
 		lower = (n + lower) % n
 	}
+	if lower < 0 {
+		lower = 0
+	}
 	if upper < 0 {
 		upper = (n + upper) % n
+	}
+	if upper < 0 {
+		upper = 0
 	}
 
 	fmt.Printf("For LRANGE key=%s, lower_s=%s, upper_s=%s, lower=%d, upper=%d, len(list)=%d\n", key, lower_s, upper_s, lower, upper, n)

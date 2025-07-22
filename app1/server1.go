@@ -482,6 +482,13 @@ func (server *Server) handleRPush(request []string) (string, error) {
 	}
 	return fmt.Sprintf(":" + strconv.Itoa(listsize) + "\r\n"), nil
 }
+func (server *Server) handleLPush(request []string) (string, error) {
+	listsize, err := server.storage.lpush(request[0], request[1:])
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf(":" + strconv.Itoa(listsize) + "\r\n"), nil
+}
 func (server *Server) handleLRange(request []string) (string, error) {
 	list_elements, err := server.storage.lrange(request[0], request[1], request[2])
 	if err != nil {
@@ -490,6 +497,14 @@ func (server *Server) handleLRange(request []string) (string, error) {
 		// return ToRespArray(list_elements), err
 	}
 	return ToRespArray(list_elements), nil
+}
+func (server *Server) handleLLen(key string) (int, error) {
+	llen, err := server.storage.llen(key)
+	if err != nil {
+		fmt.Println("........error in llen = ", err)
+		return 0, nil
+	}
+	return llen, nil
 }
 func (server *Server) handleXADD(request []string) (string, error) {
 	fmt.Printf("len(request) = %d", len(request))
@@ -1055,12 +1070,24 @@ func (server *Server) handleRequest(request []string, offset int) (string, int, 
 			break
 		}
 		response, err = server.handleRPush(request[1:])
+	case "LPUSH":
+		if len(request) < 3 {
+			fmt.Printf("%s Command expects an argument\n", request[0])
+			break
+		}
+		response, err = server.handleLPush(request[1:])
 	case "LRANGE":
 		if len(request) != 4 {
 			fmt.Printf("%s Command expects an argument\n", request[0])
 			break
 		}
 		response, err = server.handleLRange(request[1:])
+	case "LLEN":
+		if len(request) != 2 {
+			fmt.Printf("%s Command expects an argument\n", request[0])
+			break
+		}
+		response, err = server.handleLLen(request[1])
 	case "XADD":
 		if len(request) < 4 {
 			fmt.Printf("%s Command expects an argument\n", request[0])
