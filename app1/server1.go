@@ -506,6 +506,23 @@ func (server *Server) handleLLen(key string) (string, error) {
 	}
 	return fmt.Sprintf(":" + strconv.Itoa(llen) + "\r\n"), nil
 }
+func (server *Server) handlelpop(key string) (string, error) {
+	// return encoded bulkstring
+	pop_element, err := server.storage.lpop(key)
+	if err != nil {
+		return "$-1\r\n", nil
+	}
+	return ToBulkString(pop_element), nil
+}
+
+func (server *Server) handleMultiPop(key string, count string) (string, error) {
+	pop_element, err := server.storage.multilpop(key, count)
+	if err != nil {
+		return "$-1\r\n", nil
+	}
+	return ToRespArray(pop_element), nil
+}
+
 func (server *Server) handleXADD(request []string) (string, error) {
 	fmt.Printf("len(request) = %d", len(request))
 
@@ -1088,6 +1105,16 @@ func (server *Server) handleRequest(request []string, offset int) (string, int, 
 			break
 		}
 		response, err = server.handleLLen(request[1])
+	case "LPOP":
+		if len(request) < 2 || len(request) > 3 {
+			fmt.Printf("%s Incorrect number of arguments\n", request[0])
+			break
+		}
+		if len(request) == 2 {
+			response, err = server.handlelpop(request[1])
+		} else {
+			response, err = server.handleMultiPop(request[1], request[2])
+		}
 	case "XADD":
 		if len(request) < 4 {
 			fmt.Printf("%s Command expects an argument\n", request[0])

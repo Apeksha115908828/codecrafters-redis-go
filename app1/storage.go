@@ -245,6 +245,32 @@ func (store *Storage) llen(key string) (int, error) {
 	return len(store.rpush_list[key]), nil
 }
 
+func (store *Storage) lpop(key string) (string, error) {
+	_, ok := store.rpush_list[key]
+	if !ok {
+		return "", nil
+	}
+	answer := store.rpush_list[key][0]
+	store.rpush_list[key] = store.rpush_list[key][1:]
+	return answer, nil
+}
+
+func (store *Storage) multilpop(key string, count_s string) ([]string, error) {
+	_, ok := store.rpush_list[key]
+	if !ok {
+		return []string{}, nil
+	}
+	count, _ := strconv.Atoi(count_s)
+	count = min(count, len(store.rpush_list[key]))
+	answer := store.rpush_list[key][0 : count-1]
+	if count == len(store.rpush_list[key]) {
+		delete(store.rpush_list, key)
+	} else {
+		store.rpush_list[key] = store.rpush_list[key][count:]
+	}
+	return answer, nil
+}
+
 func (store *Storage) lrange(key string, lower_s string, upper_s string) ([]string, error) {
 	// TODO: handle strconv.Atoi error here
 	lower, _ := strconv.Atoi(lower_s)
