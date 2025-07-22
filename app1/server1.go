@@ -476,16 +476,18 @@ func (server *Server) handleRPush(request []string) (string, error) {
 	// for i, req := range request {
 	// 	print("rpush request[%d] = %s", i, req)
 	// }
-	listsize, err := server.storage.rpush(request[1:])
+	listsize, err := server.storage.rpush(request[0], request[1:])
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf(":" + strconv.Itoa(listsize) + "\r\n"), nil
 }
 func (server *Server) handleLRange(request []string) (string, error) {
-	list_elements, err := server.storage.lrange(request[1], request[2])
+	list_elements, err := server.storage.lrange(request[0], request[1], request[2])
 	if err != nil {
-		return "", err
+		fmt.Println("..............error in lrange = ", err)
+		return "*0\r\n", nil
+		// return ToRespArray(list_elements), err
 	}
 	return ToRespArray(list_elements), nil
 }

@@ -29,7 +29,8 @@ type StreamEntry struct {
 type Storage struct {
 	db         map[string]*DataEntry
 	stream     map[string][]*StreamEntry
-	rpush_list []string
+	rpush_list map[string][]string
+	// rpush_list []string
 }
 
 func (store *Storage) AddToStream(key string, id string, stream_vals map[string]string) string {
@@ -218,32 +219,49 @@ func (store *Storage) getAllKeysFromRDB() ([]string, error) {
 	return keys, nil
 }
 
-func (store *Storage) rpush(elements []string) (int, error) {
+func (store *Storage) rpush(key string, elements []string) (int, error) {
 	// for _, element := range elements {
-	storage.rpush_list = append(storage.rpush_list, elements...)
+	store.rpush_list[key] = append(store.rpush_list[key], elements...)
 	// }
-	return len(store.rpush_list), nil
+	return len(store.rpush_list[key]), nil
 
 }
-func (store *Storage) lrange(lower_s string, upper_s string) ([]string, error) {
+func (store *Storage) lrange(key string, lower_s string, upper_s string) ([]string, error) {
 	// TODO: handle strconv.Atoi error here
 	lower, _ := strconv.Atoi(lower_s)
 	upper, _ := strconv.Atoi(upper_s)
-	if lower >= 0 && upper < len(store.rpush_list) {
+
+	_, ok := store.rpush_list[key]
+	if !ok {
+		// var answer []string
+		return []string{}, fmt.Errorf("key missing")
+	}
+	n := len(store.rpush_list[key])
+	if lower < 0 {
+		lower = (n + lower) % n
+	}
+	if upper < 0 {
+		upper = (n + upper) % n
+	}
+
+	fmt.Printf("For LRANGE key=%s, lower_s=%s, upper_s=%s, lower=%d, upper=%d, len(list)=%d\n", key, lower_s, upper_s, lower, upper, n)
+
+	if lower >= 0 && lower < n {
 		var answer []string
-		for i := lower; i <= upper; i++ {
-			answer = append(answer, store.rpush_list[i])
+		for i := lower; i <= min(n-1, upper); i++ {
+			answer = append(answer, store.rpush_list[key][i])
 		}
 		return answer, nil
 	} else {
-		return nil, fmt.Errorf("not a valid range")
+		return []string{}, fmt.Errorf("not a valid range")
 	}
 }
+
 func NewStore() *Storage {
 	fmt.Println("Came to create a new store")
 	return &Storage{
 		db:         make(map[string]*DataEntry),
 		stream:     make(map[string][]*StreamEntry),
-		rpush_list: []string{},
+		rpush_list: make(map[string][]string),
 	}
 }
