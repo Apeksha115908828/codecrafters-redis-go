@@ -480,7 +480,6 @@ func (server *Server) handleRPush(request []string) (string, error) {
 	if err != nil {
 		return "$-1\r\n", err
 	}
-	server.notifyBlockingClients(request[0])
 	return fmt.Sprintf(":" + strconv.Itoa(listsize) + "\r\n"), nil
 }
 func (server *Server) handleLPush(request []string) (string, error) {
@@ -488,21 +487,7 @@ func (server *Server) handleLPush(request []string) (string, error) {
 	if err != nil {
 		return "$-1\r\n", err
 	}
-	server.notifyBlockingClients(request[0])
 	return fmt.Sprintf(":" + strconv.Itoa(listsize) + "\r\n"), nil
-}
-func (server *Server) notifyBlockingClients(key string) {
-	// fmt.Println("Notifying blocking clients for key = ", key)
-	server.mutex.Lock()
-	if clients, ok := server.blockingClients[key]; ok {
-		for _, client := range clients {
-			// fmt.Println("Notifying client with key = ", client.key)
-			client.resultChan <- key
-			close(client.resultChan)
-		}
-		delete(server.blockingClients, key)
-	}
-	server.mutex.Unlock()
 }
 func (server *Server) handleLRange(request []string) (string, error) {
 	list_elements, err := server.storage.lrange(request[0], request[1], request[2])
@@ -538,45 +523,55 @@ func (server *Server) handleMultiPop(key string, count string) (string, error) {
 	return ToRespArray(pop_element), nil
 }
 
-func (server *Server) handleBLPOP(key string, timestr string) (string, error) {
-	timeout, _ := strconv.Atoi(timestr)
-	print("key = %s timestr = %s", key, timestr)
-	_, ok := server.storage.rpush_list[key]
-	if !ok {
-		// handle key not present
-		if timeout == 0 {
-			blockingClient := &BlockingClient{
-				conn:       server.conn,
-				key:        key,
-				resultChan: make(chan string, 1),
-			}
-			server.mutex.Lock()
-			if server.blockingClients[key] == nil {
-				server.blockingClients[key] = make([]*BlockingClient, 0)
-			}
-			server.blockingClients[key] = append(server.blockingClients[key], blockingClient)
-			server.mutex.Unlock()
-			key := <-blockingClient.resultChan
-			entry, _ := server.storage.lpop(key)
-			answer := []string{key}
-			answer = append(answer, entry)
-			return ToRespArray(answer), nil
-		} else {
-			time.Sleep(time.Duration(timeout))
-			entry, err := server.storage.lpop(key)
-			if err != nil {
-				return "$-1\r\n", nil
-			}
-			answer := []string{key}
-			answer = append(answer, entry)
-			return ToRespArray(answer), nil
-		}
-	} else {
-		entry, _ := server.storage.lpop(key)
-		answer := []string{key}
-		answer = append(answer, entry)
-		return ToRespArray(answer), nil
+func (server *Server) handleBLPOP(key string, timeStr string) (string, error) {
+	blockTime, err := strconv.Atoi(timeStr)
+	if err != nil {
+		return "$-1\r\n", nil
 	}
+
+	// Try to pop immediately if list has elements
+	if server.storage.hasElements(key) {
+		element, err := server.storage.lpop(key)
+		if err == nil && element != "" {
+			// Return array with [key, element]
+			result := make([]string, 2)
+			result[0] = key
+			result[1] = element
+			return ToRespArray(result), nil
+		}
+	}
+
+	// If timeout is 0, block indefinitely
+	if blockTime == 0 {
+		// Create blocking client
+		blockingClient := &BlockingClient{
+			conn:      server.conn,
+			keys:      []string{key},
+			timeout:   blockTime,
+			blockedAt: time.Now(),
+			result:    make(chan *BlockingResult, 1),
+		}
+
+		// Add to blocking clients
+		server.blockingMutex.Lock()
+		if server.blockingClients[key] == nil {
+			server.blockingClients[key] = make([]*BlockingClient, 0)
+		}
+		server.blockingClients[key] = append(server.blockingClients[key], blockingClient)
+		server.blockingMutex.Unlock()
+
+		// Wait for result
+		result := <-blockingClient.result
+		if result != nil {
+			// Return array with [key, element]
+			resultArray := make([]string, 2)
+			resultArray[0] = result.key
+			resultArray[1] = result.element
+			return ToRespArray(resultArray), nil
+		}
+	}
+
+	return "$-1\r\n", nil
 }
 
 func (server *Server) handleXADD(request []string) (string, error) {
@@ -1050,7 +1045,6 @@ func (server *Server) parseString(b byte, reader *bufio.Reader) (string, error) 
 }
 
 func (server *Server) handleRequest(request []string, offset int) (string, int, error) {
-	print("handleRequest called with request = %s and offset = %d\n", request, offset)
 	var err error
 	response := ""
 	switch strings.ToUpper(request[0]) {

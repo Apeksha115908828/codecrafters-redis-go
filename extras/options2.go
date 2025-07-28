@@ -6,6 +6,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 )
 
 type Opts struct {
@@ -44,6 +45,19 @@ type MasterConfig struct {
 	propOffset int
 }
 
+type BlockingClient struct {
+	conn      *Connection
+	keys      []string
+	timeout   int
+	blockedAt time.Time
+	result    chan *BlockingResult
+}
+
+type BlockingResult struct {
+	key     string
+	element string
+}
+
 type Server struct {
 	conn    *Connection
 	opts    Opts
@@ -52,14 +66,8 @@ type Server struct {
 	mc              *MasterConfig
 	isqueuing       bool
 	queue           [][]string
-	blockingClients map[string][]*BlockingClient
-	mutex           sync.RWMutex
-}
-
-type BlockingClient struct {
-	conn       *Connection
-	key        string
-	resultChan chan string
+	blockingClients map[string][]*BlockingClient // key -> list of blocked clients
+	blockingMutex   sync.RWMutex
 }
 
 type Slaves struct {
@@ -113,7 +121,7 @@ func NewMaster(conn *Connection, opts Opts, mc *MasterConfig) *Server {
 		isqueuing:       false,
 		queue:           make([][]string, 0),
 		blockingClients: make(map[string][]*BlockingClient),
-		mutex:           sync.RWMutex{},
+		blockingMutex:   sync.RWMutex{},
 	}
 }
 
@@ -123,6 +131,6 @@ func NewReplica(conn *Connection, opts Opts) *Server {
 		opts:            opts,
 		storage:         storage, //TODO: what to put here??
 		blockingClients: make(map[string][]*BlockingClient),
-		mutex:           sync.RWMutex{},
+		blockingMutex:   sync.RWMutex{},
 	}
 }

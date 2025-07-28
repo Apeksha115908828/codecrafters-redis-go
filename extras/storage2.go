@@ -309,6 +309,11 @@ func (store *Storage) lrange(key string, lower_s string, upper_s string) ([]stri
 	}
 }
 
+func (store *Storage) hasElements(key string) bool {
+	list, ok := store.rpush_list[key]
+	return ok && len(list) > 0
+}
+
 func NewStore() *Storage {
 	fmt.Println("Came to create a new store")
 	return &Storage{
