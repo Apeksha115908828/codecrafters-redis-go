@@ -540,43 +540,44 @@ func (server *Server) handleMultiPop(key string, count string) (string, error) {
 
 func (server *Server) handleBLPOP(key string, timestr string) (string, error) {
 	timeout, _ := strconv.Atoi(timestr)
-	print("key = %s timestr = %s", key, timestr)
-	_, ok := server.storage.rpush_list[key]
-	if !ok {
-		// handle key not present
-		if timeout == 0 {
-			blockingClient := &BlockingClient{
-				conn:       server.conn,
-				key:        key,
-				resultChan: make(chan string, 1),
-			}
-			server.mutex.Lock()
-			if server.blockingClients[key] == nil {
-				server.blockingClients[key] = make([]*BlockingClient, 0)
-			}
-			server.blockingClients[key] = append(server.blockingClients[key], blockingClient)
-			server.mutex.Unlock()
-			key := <-blockingClient.resultChan
-			entry, _ := server.storage.lpop(key)
-			answer := []string{key}
-			answer = append(answer, entry)
-			return ToRespArray(answer), nil
-		} else {
-			time.Sleep(time.Duration(timeout))
-			entry, err := server.storage.lpop(key)
-			if err != nil {
-				return "$-1\r\n", nil
-			}
-			answer := []string{key}
-			answer = append(answer, entry)
-			return ToRespArray(answer), nil
-		}
-	} else {
-		entry, _ := server.storage.lpop(key)
-		answer := []string{key}
-		answer = append(answer, entry)
-		return ToRespArray(answer), nil
-	}
+	print("key = %s timestr = %d", key, timeout)
+	return "$-1\r\n", nil
+	// _, ok := server.storage.rpush_list[key]
+	// if !ok {
+	// 	// handle key not present
+	// 	if timeout == 0 {
+	// 		blockingClient := &BlockingClient{
+	// 			conn:       server.conn,
+	// 			key:        key,
+	// 			resultChan: make(chan string, 1),
+	// 		}
+	// 		server.mutex.Lock()
+	// 		if server.blockingClients[key] == nil {
+	// 			server.blockingClients[key] = make([]*BlockingClient, 0)
+	// 		}
+	// 		server.blockingClients[key] = append(server.blockingClients[key], blockingClient)
+	// 		server.mutex.Unlock()
+	// 		key := <-blockingClient.resultChan
+	// 		entry, _ := server.storage.lpop(key)
+	// 		answer := []string{key}
+	// 		answer = append(answer, entry)
+	// 		return ToRespArray(answer), nil
+	// 	} else {
+	// 		time.Sleep(time.Duration(timeout))
+	// 		entry, err := server.storage.lpop(key)
+	// 		if err != nil {
+	// 			return "$-1\r\n", nil
+	// 		}
+	// 		answer := []string{key}
+	// 		answer = append(answer, entry)
+	// 		return ToRespArray(answer), nil
+	// 	}
+	// } else {
+	// 	entry, _ := server.storage.lpop(key)
+	// 	answer := []string{key}
+	// 	answer = append(answer, entry)
+	// 	return ToRespArray(answer), nil
+	// }
 }
 
 func (server *Server) handleXADD(request []string) (string, error) {
@@ -1173,7 +1174,7 @@ func (server *Server) handleRequest(request []string, offset int) (string, int, 
 			response, err = server.handleMultiPop(request[1], request[2])
 		}
 	case "BLPOP":
-		if len(request) < 2 {
+		if len(request) < 3 {
 			fmt.Printf("%s Incorrect number of arguments\n", request[0])
 			break
 		}
