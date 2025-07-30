@@ -60,6 +60,9 @@ func handleMaster(opts Opts) {
 		slaves:     NewSlaves(),
 		propOffset: 0,
 	}
+	// create a new Server instance on first connection
+	var server *Server
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -72,9 +75,13 @@ func handleMaster(opts Opts) {
 			reader: bufio.NewReader(conn),
 			offset: 0,
 		}
+		if server == nil {
+			server = NewMaster(connection, opts, masterConf)
+		} else {
+			server.conn[connection.conn.RemoteAddr().String()] = connection
+		}
 
-		server := NewMaster(connection, opts, masterConf)
-		go server.handle()
+		go server.handle(connection.conn.RemoteAddr().String())
 	}
 }
 
@@ -92,10 +99,10 @@ func handleReplica(opts Opts) {
 	}
 	server := NewReplica(connection, opts)
 	//handshake
-	server.sendHandshake(opts)
+	server.sendHandshake(opts, connection.conn.RemoteAddr().String())
 
 	//handle
-	server.handle()
+	server.handle(connection.conn.RemoteAddr().String())
 }
 
 func (conn *Connection) Read() (int, []string, error) {
@@ -150,7 +157,7 @@ func (conn *Connection) Read() (int, []string, error) {
 func (server *Server) handlePing() (string, error) {
 	if server.opts.Role == "master" {
 		// _, err := server.conn.conn.Write([]byte("+PONG\r\n"))
-		return fmt.Sprintf("+PONG\r\n"), nil
+		return "+PONG\r\n", nil
 		// if err != nil {
 		// 	return fmt.Errorf("HandlePing::Write to connection failed with %v", err)
 		// }
@@ -166,7 +173,7 @@ func EncodeBulkString(str string) string {
 
 func (server *Server) handleEcho(message string) (string, error) {
 	// _, err := server.conn.conn.Write([]byte(EncodeBulkString(message)))
-	return fmt.Sprintf(EncodeBulkString(message)), nil
+	return EncodeBulkString(message), nil
 	// if err != nil {
 	// 	return fmt.Errorf("echo failed to write with %v", err)
 	// }
@@ -183,14 +190,14 @@ func (server *Server) handleInfo(argument string) (string, error) {
 	info.WriteString("master_replid:" + server.opts.ReplicaId + "\r\n")
 	info.WriteString("master_repl_offset:" + strconv.FormatInt(int64(server.mc.propOffset), 10) + "\r\n")
 	// _, err := server.conn.conn.Write([]byte(EncodeBulkString(info.String())))
-	return fmt.Sprintf(EncodeBulkString(info.String())), nil
+	return EncodeBulkString(info.String()), nil
 	// if err != nil {
 	// 	return fmt.Errorf("write to connection failed with %v", err)
 	// }
 	// return nil
 }
 
-func (server *Server) handlePsync(request []string) (string, error) {
+func (server *Server) handlePsync(request []string, client string) (string, error) {
 	emptyrdb, err := hex.DecodeString("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2")
 	if err != nil {
 		return "", fmt.Errorf("wrror while decoding the hex string with rdb file content")
@@ -213,11 +220,11 @@ func (server *Server) handlePsync(request []string) (string, error) {
 	// }
 	//Add yo slaves
 	fmt.Println("Adding to the slaves......")
-	server.mc.slaves.AddToSlaves(server.conn.conn.RemoteAddr(), server.conn)
+	server.mc.slaves.AddToSlaves(server.conn[client].conn.RemoteAddr(), server.conn[client])
 	return response, nil
 }
 
-func (server *Server) handleReplconf(request []string) (string, error) {
+func (server *Server) handleReplconf(request []string, client string) (string, error) {
 	fmt.Println("got handleReplconf......")
 	response := ""
 	switch strings.ToUpper(request[0]) {
@@ -227,7 +234,7 @@ func (server *Server) handleReplconf(request []string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("error with strconv.Atoi %v", err)
 		}
-		err = server.mc.slaves.HandleAck(server.conn.conn.RemoteAddr(), ack)
+		err = server.mc.slaves.HandleAck(server.conn[client].conn.RemoteAddr(), ack)
 		if err != nil {
 			return "", fmt.Errorf("ack handling failed with error %v", err)
 		}
@@ -237,16 +244,16 @@ func (server *Server) handleReplconf(request []string) (string, error) {
 		}
 	case "GETACK":
 		// For the slaves
-		offset := server.conn.offset
+		offset := server.conn[client].offset
 		fmt.Println("Responding to the getAck command......")
 		response = fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%d\r\n", len(strconv.Itoa(offset)), offset)
 		// _, err := server.conn.conn.Write([]byte(response))
 		// if err != nil {
 		// 	return "", fmt.Errorf("send ACK failed with error %v", err)
 		// }
-		server.conn.offset += 37
+		server.conn[client].offset += 37
 	default:
-		response = fmt.Sprintf("+OK\r\n")
+		response = "+OK\r\n"
 		// _, err := server.conn.conn.Write([]byte("+OK\r\n"))
 		// if err != nil {
 		// 	return fmt.Errorf("error writing to connection %v", err)
@@ -255,8 +262,8 @@ func (server *Server) handleReplconf(request []string) (string, error) {
 	return response, nil
 }
 
-func (server *Server) handleGet(request []string) (string, error) {
-	value, err := server.storage.GetFromDataBase(request[0])
+func (server *Server) handleGet(request []string, client string) (string, error) {
+	value, err := server.storage.GetFromDataBase(request[0], client)
 	var response string
 	if err != nil {
 		response = "$-1\r\n"
@@ -282,7 +289,7 @@ func ToRespArray(arr []string) string {
 
 	return respArr
 }
-func (server *Server) handleSet(request []string) (string, error) {
+func (server *Server) handleSet(request []string, client string) (string, error) {
 	// EX for second, PX for milli second
 	key := request[0]
 	value := request[1]
@@ -295,7 +302,7 @@ func (server *Server) handleSet(request []string) (string, error) {
 			expiry = time.Now().Add(time.Duration(val) * time.Second)
 		}
 	}
-	server.storage.AddToDataBase(key, value, expiry)
+	server.storage.AddToDataBase(key, value, expiry, client)
 	if server.opts.Role == "master" {
 		// _, err := server.conn.conn.Write([]byte("+OK\r\n"))
 		// if err != nil {
@@ -391,13 +398,14 @@ func (server *Server) handleConfig(request []string) (string, error) {
 	switch strings.ToUpper(request[0]) {
 	case "GET":
 		query := request[1]
-		if query == "dir" {
+		switch query {
+		case "dir":
 			// _, err := server.conn.conn.Write([]byte("*2\r\n" + EncodeBulkString("dir") + EncodeBulkString(server.opts.Dir)))
 			// if err != nil {
 			// 	return "", fmt.Errorf("config handling failed with %v", err)
 			// }
 			return fmt.Sprintf("*2\r\n" + EncodeBulkString("dir") + EncodeBulkString(server.opts.Dir)), nil
-		} else if query == "dbfilename" {
+		case "dbfilename":
 			// _, err := server.conn.conn.Write([]byte("*2\r\n" + EncodeBulkString("dbfilename") + EncodeBulkString(server.opts.DbFileName)))
 			// if err != nil {
 			// 	return "", fmt.Errorf("config handling failed with %v", err)
@@ -408,9 +416,9 @@ func (server *Server) handleConfig(request []string) (string, error) {
 	return response, nil
 }
 
-func (server *Server) handleKeys(key string) (string, error) {
+func (server *Server) handleKeys(key string, client string) (string, error) {
 	if key == "*" {
-		keys, err := server.storage.getAllKeysFromRDB()
+		keys, err := server.storage.getAllKeysFromRDB(client)
 		if err != nil {
 			return "", fmt.Errorf("error getting keys: %v", err)
 		}
@@ -419,17 +427,18 @@ func (server *Server) handleKeys(key string) (string, error) {
 		for key_i := range len(keys) {
 			outputstring += EncodeBulkString(keys[key_i])
 		}
-		return fmt.Sprintf(ToRespArray(keys)), err
+		// return fmt.Sprintf(ToRespArray(keys)), err
+		return ToRespArray(keys), err
 	} else {
 		return "", fmt.Errorf("command %s not supported", key)
 	}
 }
 
-func (server *Server) handleIncr(key string) (string, error) {
+func (server *Server) handleIncr(key string, client string) (string, error) {
 	fmt.Println("HandleIncr called for key = ", key)
 	// var value string = ""
 	var valueint int = 0
-	val, err := server.storage.GetFromDataBase(key)
+	val, err := server.storage.GetFromDataBase(key, client)
 	if err != nil {
 		fmt.Println("Value not present in the database", valueint)
 		// server.storage.AddToDataBase(key, string(1), time.Time{})
@@ -451,7 +460,7 @@ func (server *Server) handleIncr(key string) (string, error) {
 	// valueint, err := strconv.Atoi(value)
 
 	valueint += 1
-	server.storage.AddToDataBase(key, strconv.Itoa(valueint), time.Time{})
+	server.storage.AddToDataBase(key, strconv.Itoa(valueint), time.Time{}, client)
 	// _, err = server.conn.conn.Write([]byte(":" + strconv.Itoa(valueint) + "\r\n"))
 	// if err != nil {
 	// 	return "", fmt.Errorf("error writing to conn %v", err)
@@ -460,11 +469,11 @@ func (server *Server) handleIncr(key string) (string, error) {
 	return fmt.Sprintf(":" + strconv.Itoa(valueint) + "\r\n"), nil
 }
 
-func (server *Server) handleType(key string) (string, error) {
+func (server *Server) handleType(key string, client string) (string, error) {
 	if server.storage.findKeyInStream(key) {
 		return "+stream\r\n", nil
 	}
-	value, err := server.storage.GetFromDataBase(key)
+	value, err := server.storage.GetFromDataBase(key, client)
 	if err != nil {
 		return "+none\r\n", nil
 	}
@@ -491,19 +500,46 @@ func (server *Server) handleLPush(request []string) (string, error) {
 	server.notifyBlockingClients(request[0])
 	return fmt.Sprintf(":" + strconv.Itoa(listsize) + "\r\n"), nil
 }
+
 func (server *Server) notifyBlockingClients(key string) {
-	// fmt.Println("Notifying blocking clients for key = ", key)
 	server.mutex.Lock()
-	if clients, ok := server.blockingClients[key]; ok {
-		for _, client := range clients {
-			// fmt.Println("Notifying client with key = ", client.key)
-			client.resultChan <- key
-			close(client.resultChan)
+	defer server.mutex.Unlock()
+
+	if clients, ok := server.blockingClients[key]; ok && len(clients) > 0 {
+		print("Waking up blocking client for key = ", key)
+		// ✅ Only wake the FIRST waiting client (FIFO)
+		client := clients[0]
+
+		// ✅ Pop an item from the list (we’re here because LPUSH/RPUSH was called)
+		entry, _ := server.storage.lpop(key)
+
+		// ✅ Build proper BLPOP response
+		response := ToRespArray([]string{key, entry})
+
+		// ✅ Send the response to the blocked client
+		client.conn.conn.Write([]byte(response))
+		// ✅ Remove client from the wait queue
+		server.blockingClients[key] = clients[1:]
+		if len(server.blockingClients[key]) == 0 {
+			delete(server.blockingClients, key)
 		}
-		delete(server.blockingClients, key)
 	}
-	server.mutex.Unlock()
 }
+
+//	func (server *Server) notifyBlockingClients_orig(key string) {
+//		fmt.Println("Notifying blocking clients for key = ", key)
+//		server.mutex.Lock()
+//		if clients, ok := server.blockingClients[key]; ok {
+//			fmt.Println("Notifying clients for key = ", key, " with number of clients = ", len(clients))
+//			for _, client := range clients {
+//				fmt.Println("Notifying client with key = ", client.key)
+//				client.resultChan <- key
+//				close(client.resultChan)
+//			}
+//			delete(server.blockingClients, key)
+//		}
+//		server.mutex.Unlock()
+//	}
 func (server *Server) handleLRange(request []string) (string, error) {
 	list_elements, err := server.storage.lrange(request[0], request[1], request[2])
 	if err != nil {
@@ -537,48 +573,111 @@ func (server *Server) handleMultiPop(key string, count string) (string, error) {
 	}
 	return ToRespArray(pop_element), nil
 }
-
-func (server *Server) handleBLPOP(key string, timestr string) (string, error) {
+func (server *Server) handleBLPOP(key string, timestr string, client string) (string, error) {
 	timeout, _ := strconv.Atoi(timestr)
-	print("key = %s timestr = %d", key, timeout)
-	return "$-1\r\n", nil
-	// _, ok := server.storage.rpush_list[key]
-	// if !ok {
-	// 	// handle key not present
-	// 	if timeout == 0 {
-	// 		blockingClient := &BlockingClient{
-	// 			conn:       server.conn,
-	// 			key:        key,
-	// 			resultChan: make(chan string, 1),
-	// 		}
-	// 		server.mutex.Lock()
-	// 		if server.blockingClients[key] == nil {
-	// 			server.blockingClients[key] = make([]*BlockingClient, 0)
-	// 		}
-	// 		server.blockingClients[key] = append(server.blockingClients[key], blockingClient)
-	// 		server.mutex.Unlock()
-	// 		key := <-blockingClient.resultChan
-	// 		entry, _ := server.storage.lpop(key)
-	// 		answer := []string{key}
-	// 		answer = append(answer, entry)
-	// 		return ToRespArray(answer), nil
-	// 	} else {
-	// 		time.Sleep(time.Duration(timeout))
-	// 		entry, err := server.storage.lpop(key)
-	// 		if err != nil {
-	// 			return "$-1\r\n", nil
-	// 		}
-	// 		answer := []string{key}
-	// 		answer = append(answer, entry)
-	// 		return ToRespArray(answer), nil
-	// 	}
-	// } else {
-	// 	entry, _ := server.storage.lpop(key)
-	// 	answer := []string{key}
-	// 	answer = append(answer, entry)
-	// 	return ToRespArray(answer), nil
-	// }
+
+	// ✅ First check if there’s already data in the list
+	entries, ok := server.storage.rpush_list[key]
+	if ok && len(entries) > 0 {
+		entry, _ := server.storage.lpop(key)
+		return ToRespArray([]string{key, entry}), nil
+	}
+
+	// ✅ Otherwise, register the client as “blocked”
+	blockingClient := &BlockingClient{
+		conn:       server.conn[client],
+		key:        key,
+		resultChan: make(chan string, 1),
+	}
+
+	server.mutex.Lock()
+	server.blockingClients[key] = append(server.blockingClients[key], blockingClient)
+	print("Registered blocking client for key = ", key, " with number of clients = ", len(server.blockingClients[key]))
+	server.mutex.Unlock()
+
+	// ✅ If timeout > 0, schedule a timeout handler
+	if timeout > 0 {
+		go func() {
+			<-time.After(time.Duration(timeout) * time.Second) // Redis uses seconds for timeout
+			server.mutex.Lock()
+			defer server.mutex.Unlock()
+
+			// Find the client in blockingClients for this key
+			if clients, ok := server.blockingClients[key]; ok {
+				for i, c := range clients {
+					if c == blockingClient {
+						// ✅ Send (nil) to the client to indicate timeout
+						c.conn.conn.Write([]byte("$-1\r\n"))
+
+						// ✅ Remove this client from the waiting list
+						print("Timeout for blocking client for key = ", key)
+						server.blockingClients[key] = append(clients[:i], clients[i+1:]...)
+						if len(server.blockingClients[key]) == 0 {
+							print("No more blocking clients for key = ", key)
+							delete(server.blockingClients, key)
+						}
+						break
+					}
+				}
+			}
+		}()
+	}
+
+	// ✅ IMPORTANT: Return empty response — we’ll respond later when LPUSH/RPUSH happens
+	return "", nil
 }
+
+// func (server *Server) handleBLPOP_orig(key string, timestr string) (string, error) {
+// 	timeout, _ := strconv.Atoi(timestr)
+// 	entries, ok := server.storage.rpush_list[key]
+// 	if !ok || len(entries) == 0 {
+// 		// handle key not present
+// 		if timeout == 0 {
+// 			print("Handle BLPOP called for key = ", key, " with timeout = ", timeout)
+// 			blockingClient := &BlockingClient{
+// 				conn:       server.conn,
+// 				key:        key,
+// 				resultChan: make(chan string, 1),
+// 			}
+// 			server.mutex.Lock()
+// 			server.blockingClients[key] = append(server.blockingClients[key], blockingClient)
+// 			server.mutex.Unlock()
+// 			key = <-blockingClient.resultChan
+// 			entry, _ := server.storage.lpop(key)
+// 			answer := []string{key}
+// 			answer = append(answer, entry)
+// 			return ToRespArray(answer), nil
+// 		} else {
+// 			blockingClient := &BlockingClient{
+// 				conn:       server.conn,
+// 				key:        key,
+// 				resultChan: make(chan string, 1),
+// 			}
+// 			server.mutex.Lock()
+// 			server.blockingClients[key] = append(server.blockingClients[key], blockingClient)
+// 			server.mutex.Unlock()
+// 			select {
+// 			case <-blockingClient.resultChan:
+// 				entry, _ := server.storage.lpop(key)
+// 				answer := []string{key}
+// 				answer = append(answer, entry)
+// 				return ToRespArray(answer), nil
+// 			case <-time.After(time.Duration(timeout) * time.Millisecond):
+// 				entry, _ := server.storage.lpop(key)
+// 				answer := []string{key}
+// 				answer = append(answer, entry)
+// 				return ToRespArray(answer), nil
+// 			}
+// 		}
+// 	} else {
+// 		entry, _ := server.storage.lpop(key)
+// 		answer := []string{key}
+// 		answer = append(answer, entry)
+// 		print("BLPOP returning answer = %s", answer)
+// 		return ToRespArray(answer), nil
+// 		// return "$-1\r\n", nil
+// 	}
+// }
 
 func (server *Server) handleXADD(request []string) (string, error) {
 	fmt.Printf("len(request) = %d", len(request))
@@ -854,19 +953,19 @@ func parseLength(length byte, reader *bufio.Reader) (int, error) {
 	}
 }
 
-func (server *Server) handleMulti() error {
+func (server *Server) handleMulti(client string) error {
 
-	_, err := server.conn.conn.Write([]byte("+OK\r\n"))
+	_, err := server.conn[client].conn.Write([]byte("+OK\r\n"))
 	return err
 }
 
-func (server *Server) handleExec(offset int) error {
+func (server *Server) handleExec(offset int, client string) error {
 	// currQueue := server.queue[length-1]
 	responses := []string{}
-	fmt.Printf("num of command to execute = %d", len(server.queue))
-	for index := range server.queue {
-		entry := server.queue[index]
-		response, offset, err := server.handleRequest(entry, offset)
+	fmt.Printf("num of command to execute = %d", len(server.queue[client]))
+	for index := range server.queue[client] {
+		entry := server.queue[client][index]
+		response, offset, err := server.handleRequest(entry, offset, client)
 		if err != nil {
 			fmt.Println("error occurred with this command", entry[0])
 			// if response != "" {
@@ -878,14 +977,15 @@ func (server *Server) handleExec(offset int) error {
 		responses = append(responses, response)
 		fmt.Printf("got offset = %d and request = %s response = %s \n", offset, entry[0], response)
 	}
-	server.queue = make([][]string, 0)
+	// server.queue = make([][]string, 0)
+	server.queue[client] = make([][]string, 0)
 	fmt.Printf("num of responses = %d", len(responses))
 	resp := fmt.Sprintf("*%d\r\n", len(responses))
 	for _, s := range responses {
 		// resp += responses[index]
 		resp += s
 	}
-	_, err := server.conn.conn.Write([]byte(resp))
+	_, err := server.conn[client].conn.Write([]byte(resp))
 	if err != nil {
 		return fmt.Errorf("error writing to the conn")
 	}
@@ -896,7 +996,7 @@ func (server *Server) handleDiscard() error {
 	return nil
 }
 
-func (server *Server) loadRdb() error {
+func (server *Server) loadRdb(client string) error {
 	filepath := server.opts.Dir + "/" + server.opts.DbFileName
 	fmt.Printf("filepath for rdb file = %s", filepath)
 	file, err := os.Open(filepath)
@@ -1015,7 +1115,7 @@ SkipToDB:
 				//skip adding already expired keys, this is possible as we are reading from the rdb file
 				fmt.Print("Adding to DB....\n", expiryVal)
 				fmt.Print(" expiryVal.IsZero()", expiryVal.IsZero())
-				server.storage.AddToDataBase(key, value, expiryVal)
+				server.storage.AddToDataBase(key, value, expiryVal, client)
 			}
 			// expiryVal = time.Time{}
 		}
@@ -1050,8 +1150,8 @@ func (server *Server) parseString(b byte, reader *bufio.Reader) (string, error) 
 	return string(str[:n]), nil
 }
 
-func (server *Server) handleRequest(request []string, offset int) (string, int, error) {
-	print("handleRequest called with request = %s and offset = %d\n", request, offset)
+func (server *Server) handleRequest(request []string, offset int, client string) (string, int, error) {
+	// print("handleRequest called with request = %s and offset = %d\n", request, offset)
 	var err error
 	response := ""
 	switch strings.ToUpper(request[0]) {
@@ -1064,14 +1164,14 @@ func (server *Server) handleRequest(request []string, offset int) (string, int, 
 			fmt.Println("Ill formed command REPLCONF")
 			break
 		}
-		response, err = server.handleReplconf(request[1:])
+		response, err = server.handleReplconf(request[1:], client)
 		//handle replconf
 	case "PSYNC":
 		if len(request) != 3 {
 			fmt.Println("Ill formed command PSYNC")
 			break
 		}
-		response, err = server.handlePsync(request[1:])
+		response, err = server.handlePsync(request[1:], client)
 		//handle psync
 	case "ECHO":
 		if len(request) != 2 {
@@ -1084,7 +1184,7 @@ func (server *Server) handleRequest(request []string, offset int) (string, int, 
 			fmt.Println("Ill formed command SET")
 			break
 		}
-		response, err = server.handleSet(request[1:])
+		response, err = server.handleSet(request[1:], client)
 		fmt.Println("Handled Set on master........")
 		if server.opts.Role == "master" {
 			server.mc.slaves.lock.RLock()
@@ -1102,7 +1202,7 @@ func (server *Server) handleRequest(request []string, offset int) (string, int, 
 			fmt.Println("Ill formed command GET")
 			break
 		}
-		response, err = server.handleGet(request[1:])
+		response, err = server.handleGet(request[1:], client)
 	case "INFO":
 		if len(request) != 2 {
 			fmt.Printf("%s expects at least 1 argument \n", request[0])
@@ -1125,19 +1225,19 @@ func (server *Server) handleRequest(request []string, offset int) (string, int, 
 			fmt.Printf("%s Command expects an argument\n", request[0])
 			break
 		}
-		response, err = server.handleKeys(request[1])
+		response, err = server.handleKeys(request[1], client)
 	case "INCR":
 		if len(request) != 2 {
 			fmt.Printf("%s Command expects an argument\n", request[0])
 			break
 		}
-		response, err = server.handleIncr(request[1])
+		response, err = server.handleIncr(request[1], client)
 	case "TYPE":
 		if len(request) != 2 {
 			fmt.Printf("%s Command expects an argument\n", request[0])
 			break
 		}
-		response, err = server.handleType(request[1])
+		response, err = server.handleType(request[1], client)
 
 	case "RPUSH":
 		if len(request) < 3 {
@@ -1178,7 +1278,7 @@ func (server *Server) handleRequest(request []string, offset int) (string, int, 
 			fmt.Printf("%s Incorrect number of arguments\n", request[0])
 			break
 		}
-		response, err = server.handleBLPOP(request[1], request[2])
+		response, err = server.handleBLPOP(request[1], request[2], client)
 	case "XADD":
 		if len(request) < 4 {
 			fmt.Printf("%s Command expects an argument\n", request[0])
@@ -1203,70 +1303,71 @@ func (server *Server) handleRequest(request []string, offset int) (string, int, 
 	return response, offset, err
 }
 
-func (server *Server) handle() {
-	defer server.conn.conn.Close()
+func (server *Server) handle(client string) {
+	defer server.conn[client].conn.Close()
 	//load the rdb file
 
 	if server.opts.Dir != "" && server.opts.DbFileName != "" {
-		err := server.loadRdb()
+		err := server.loadRdb(client)
 		if err != nil {
 			fmt.Printf("Error occurred while reading form RDB file %v", err)
 			// return
 		}
 	}
 	for {
-		offset, request, err := server.conn.Read()
+		offset, request, err := server.conn[client].Read()
 		if err != nil {
 			fmt.Printf("Read failed with %v", err)
 			return
 		}
-		fmt.Println("Offset here", server.conn.conn.RemoteAddr(), " offset = ", offset)
+		fmt.Println("Offset here", server.conn[client].conn.RemoteAddr(), " offset = ", offset)
 		//handle the requests here....
 
 		switch strings.ToUpper(request[0]) {
 		case "MULTI":
-			server.isqueuing = true
-			err = server.handleMulti()
+			server.isqueuing[client] = true
+			err = server.handleMulti(client)
 		case "EXEC":
-			if !server.isqueuing {
-				server.conn.conn.Write([]byte("-ERR EXEC without MULTI\r\n"))
+			if !server.isqueuing[client] {
+				server.conn[client].conn.Write([]byte("-ERR EXEC without MULTI\r\n"))
 				break
 			}
-			if len(server.queue) == 0 {
-				server.isqueuing = false
-				_, err = server.conn.conn.Write([]byte("*0\r\n"))
+			if len(server.queue[client]) == 0 {
+				server.isqueuing[client] = false
+				_, err = server.conn[client].conn.Write([]byte("*0\r\n"))
 				if err != nil {
 					fmt.Printf("error writing to conn %v \n", err)
 				}
 				break
 			}
-			server.isqueuing = false
-			err = server.handleExec(offset)
+			server.isqueuing[client] = false
+			err = server.handleExec(offset, client)
 		case "DISCARD":
-			if server.isqueuing {
-				_, err := server.conn.conn.Write([]byte("+OK\r\n"))
+			if server.isqueuing[client] {
+				_, err := server.conn[client].conn.Write([]byte("+OK\r\n"))
 				if err != nil {
 					fmt.Printf("error writing to the conn %v \n", err)
 				}
-				server.queue = make([][]string, 0)
+				// server.queue = make([][]string, 0)
+				server.queue[client] = make([][]string, 0)
 			} else {
-				_, err := server.conn.conn.Write([]byte("-ERR DISCARD without MULTI\r\n"))
+				_, err := server.conn[client].conn.Write([]byte("-ERR DISCARD without MULTI\r\n"))
 				if err != nil {
 					fmt.Printf("error writing to the conn %v \n", err)
 				}
 			}
-			server.isqueuing = false
+			server.isqueuing[client] = false
 			err = server.handleDiscard()
 		default:
-			if server.isqueuing {
-				server.queue = append(server.queue, request)
-				server.conn.conn.Write([]byte("+QUEUED\r\n"))
+			if server.isqueuing[client] {
+				server.queue[client] = append(server.queue[client], request)
+				server.conn[client].conn.Write([]byte("+QUEUED\r\n"))
 			} else {
-				response, _, err := server.handleRequest(request, offset)
+				response, _, err := server.handleRequest(request, offset, client)
 				if err != nil {
 					return
 				}
-				_, err = server.conn.conn.Write([]byte(response))
+				_, err = server.conn[client].conn.Write([]byte(response))
 				if err != nil {
 					fmt.Printf("error writing to the conn %v \n", err)
 					return
@@ -1281,7 +1382,7 @@ func (server *Server) handle() {
 		}
 
 		if server.opts.Role != "master" && (len(request) <= 1 || request[1] != "GETACK") {
-			server.conn.offset += offset
+			server.conn[client].offset += offset
 		}
 	}
 }
@@ -1307,16 +1408,16 @@ func (conn *Connection) readLine() (int, string, error) {
 	return bytesRead, str, err
 }
 
-func (server *Server) sendHandshake(opts Opts) error {
+func (server *Server) sendHandshake(opts Opts, client string) error {
 	fmt.Println("sending ping")
 
-	_, err := server.conn.conn.Write([]byte("*1\r\n$4\r\nPING\r\n"))
+	_, err := server.conn[client].conn.Write([]byte("*1\r\n$4\r\nPING\r\n"))
 	if err != nil {
 		fmt.Printf("Error while connecting to the master %v\n", err)
 		os.Exit(1)
 	}
 
-	_, response, err := server.conn.readLine()
+	_, response, err := server.conn[client].readLine()
 	if err != nil {
 		//TODO: what is %v here??
 		return fmt.Errorf("reading from connection failed %v", err)
@@ -1326,13 +1427,13 @@ func (server *Server) sendHandshake(opts Opts) error {
 		return fmt.Errorf("didn't receive \"PONG\": received %s", response)
 	}
 
-	_, err = server.conn.conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n"))
+	_, err = server.conn[client].conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n"))
 	if err != nil {
 		fmt.Printf("error while connecting to the master %v\n", err)
 		os.Exit(1)
 	}
 
-	_, response, err = server.conn.readLine()
+	_, response, err = server.conn[client].readLine()
 	if err != nil {
 		return fmt.Errorf("reading from connection failed %v", err)
 	}
@@ -1343,13 +1444,13 @@ func (server *Server) sendHandshake(opts Opts) error {
 
 	fmt.Println("sending second replconf")
 
-	_, err = server.conn.conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n"))
+	_, err = server.conn[client].conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n"))
 	if err != nil {
 		fmt.Println("Error while connecting to the master .....")
 		os.Exit(1)
 	}
 
-	_, response, err = server.conn.readLine()
+	_, response, err = server.conn[client].readLine()
 	if err != nil {
 		return fmt.Errorf("reading from connection failed %v", err)
 	}
@@ -1360,13 +1461,13 @@ func (server *Server) sendHandshake(opts Opts) error {
 
 	fmt.Println("sending psync")
 
-	_, err = server.conn.conn.Write([]byte("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"))
+	_, err = server.conn[client].conn.Write([]byte("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"))
 	if err != nil {
 		fmt.Printf("Error while connecting to the master %v\n", err)
 		os.Exit(1)
 	}
 
-	_, response, err = server.conn.readLine()
+	_, response, err = server.conn[client].readLine()
 	if err != nil {
 		return fmt.Errorf("reading from connection failed %v", err)
 	}
@@ -1375,7 +1476,7 @@ func (server *Server) sendHandshake(opts Opts) error {
 		return fmt.Errorf("didn't receive \"FULLRESYNC\", instead received %s", response)
 	}
 
-	_, response, err = server.conn.readLine()
+	_, response, err = server.conn[client].readLine()
 	fmt.Println("Recieved RDB File", response)
 	if err != nil {
 		return fmt.Errorf("reading from connection failed %v", err)
@@ -1392,7 +1493,7 @@ func (server *Server) sendHandshake(opts Opts) error {
 
 	//TODO: should we store this content somewhere??
 	temp := make([]byte, rdbFileLen)
-	rdbContent, err := io.ReadFull(server.conn.reader, temp)
+	rdbContent, err := io.ReadFull(server.conn[client].reader, temp)
 	if err != nil {
 		return fmt.Errorf("ReadFull fialed with error %v", err)
 	}

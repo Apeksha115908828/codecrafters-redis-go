@@ -45,13 +45,15 @@ type MasterConfig struct {
 }
 
 type Server struct {
-	conn    *Connection
+	conn    map[string]*Connection
 	opts    Opts
 	storage *Storage
 
-	mc              *MasterConfig
-	isqueuing       bool
-	queue           [][]string
+	mc *MasterConfig
+	// isqueuing       bool
+	// queue           [][]string
+	isqueuing       map[string]bool
+	queue           map[string][][]string
 	blockingClients map[string][]*BlockingClient
 	mutex           sync.RWMutex
 }
@@ -104,22 +106,32 @@ func (slaves *Slaves) Count() int {
 var storage = NewStore()
 
 func NewMaster(conn *Connection, opts Opts, mc *MasterConfig) *Server {
+	connections := make(map[string]*Connection)
+	connections[conn.conn.RemoteAddr().String()] = conn
+	isqueuingval := make(map[string]bool)
+	isqueuingval[conn.conn.RemoteAddr().String()] = false
+	queueval := make(map[string][][]string)
+	queueval[conn.conn.RemoteAddr().String()] = make([][]string, 0)
 	return &Server{
-		conn:    conn,
+		conn:    connections,
 		opts:    opts,
-		storage: storage, //TODO: what to put here??
+		storage: storage,
 
-		mc:              mc,
-		isqueuing:       false,
-		queue:           make([][]string, 0),
+		mc: mc,
+		// 		isqueuing:       false,
+		// queue:           make([][]string, 0),
+		isqueuing:       isqueuingval,
+		queue:           queueval,
 		blockingClients: make(map[string][]*BlockingClient),
 		mutex:           sync.RWMutex{},
 	}
 }
 
 func NewReplica(conn *Connection, opts Opts) *Server {
+	connections := make(map[string]*Connection)
+	connections[conn.conn.RemoteAddr().String()] = conn
 	return &Server{
-		conn:            conn,
+		conn:            connections,
 		opts:            opts,
 		storage:         storage, //TODO: what to put here??
 		blockingClients: make(map[string][]*BlockingClient),

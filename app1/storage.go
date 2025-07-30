@@ -28,9 +28,10 @@ type StreamEntry struct {
 // "us" (or "µs"), "ms", "s", "m", "h".
 
 type Storage struct {
-	db         map[string]*DataEntry
+	db         map[string]*DataEntry // client -> key -> DataEntry
 	stream     map[string][]*StreamEntry
 	rpush_list map[string][]string
+	// db         map[string](map[string]*DataEntry) // client -> key -> DataEntry
 	// rpush_list []string
 }
 
@@ -165,10 +166,12 @@ func (store *Storage) checkIDValidity(key string, id string) (string, bool) {
 	}
 }
 
-func (store *Storage) GetFromDataBase(key string) (*string, error) {
-	if store.db == nil {
-		return nil, fmt.Errorf("database is not initialized")
-	}
+func (store *Storage) GetFromDataBase(key string, client string) (*string, error) {
+	// _, ok := store.db[client]
+	// if !ok {
+	// 	return nil, fmt.Errorf("client %s not found in database", client)
+	// }
+	// curr_store := store.db[client]
 	fmt.Println("size of the store: ", len(store.db))
 	// for k, v := range store.db {
 	// 	fmt.Printf("Key: %s, Value: %+v\n", k, v)
@@ -188,14 +191,23 @@ func (store *Storage) GetFromDataBase(key string) (*string, error) {
 }
 
 // func AddToDataBase(store *Storage, args Array) {
-func (store *Storage) AddToDataBase(key string, value string, expiryVal time.Time) {
-	_, err := store.GetFromDataBase(key)
+func (store *Storage) AddToDataBase(key string, value string, expiryVal time.Time, client string) {
+	_, err := store.GetFromDataBase(key, client)
 	if err != nil {
+		// create an entry for store.db[client]
+		// _, ok := store.db[client]
+		// if !ok {
+		// 	store.db[client] = make(map[string]*DataEntry)
+		// }
 		store.db[key] = &DataEntry{
 			value:  value,
 			expiry: expiryVal,
 		}
 	} else {
+		// _, ok := store.db[client]
+		// if !ok {
+		// 	store.db[client] = make(map[string]*DataEntry)
+		// }
 		entry, ok := store.db[key]
 		if !ok {
 			fmt.Println("Something happened while fetching existing entry")
@@ -210,8 +222,12 @@ func (store *Storage) AddToDataBase(key string, value string, expiryVal time.Tim
 	fmt.Println("In set function size of the store: ", len(store.db))
 }
 
-func (store *Storage) getAllKeysFromRDB() ([]string, error) {
+func (store *Storage) getAllKeysFromRDB(client string) ([]string, error) {
 	var keys []string
+	// _, ok := store.db
+	// if !ok {
+	// 	return nil, fmt.Errorf("client %s not found in database", client)
+	// }
 	fmt.Printf("came here, store.db size = %d", len(store.db))
 	for key, value := range store.db {
 		keys = append(keys, key)
@@ -312,7 +328,8 @@ func (store *Storage) lrange(key string, lower_s string, upper_s string) ([]stri
 func NewStore() *Storage {
 	fmt.Println("Came to create a new store")
 	return &Storage{
-		db:         make(map[string]*DataEntry),
+		db: make(map[string]*DataEntry),
+		// db:         make(map[string](map[string]*DataEntry)),
 		stream:     make(map[string][]*StreamEntry),
 		rpush_list: make(map[string][]string),
 	}
