@@ -56,12 +56,21 @@ type Server struct {
 	queue           map[string][][]string
 	blockingClients map[string][]*BlockingClient
 	mutex           sync.RWMutex
+	blockingResults map[string](map[string]*BlockingResult) // map of key to map of blockingresult
+	resultmutex     sync.RWMutex
 }
 
 type BlockingClient struct {
 	conn       *Connection
 	key        string
 	resultChan chan string
+	timeout    float64
+}
+
+type BlockingResult struct {
+	conn   *Connection
+	key    string
+	result string
 }
 
 type Slaves struct {
@@ -124,6 +133,8 @@ func NewMaster(conn *Connection, opts Opts, mc *MasterConfig) *Server {
 		queue:           queueval,
 		blockingClients: make(map[string][]*BlockingClient),
 		mutex:           sync.RWMutex{},
+		blockingResults: make(map[string](map[string]*BlockingResult)), // map of key to map of blockingresult
+		resultmutex:     sync.RWMutex{},
 	}
 }
 
@@ -136,5 +147,7 @@ func NewReplica(conn *Connection, opts Opts) *Server {
 		storage:         storage, //TODO: what to put here??
 		blockingClients: make(map[string][]*BlockingClient),
 		mutex:           sync.RWMutex{},
+		blockingResults: make(map[string](map[string]*BlockingResult)), // map of key to map of blockingresult
+		resultmutex:     sync.RWMutex{},
 	}
 }

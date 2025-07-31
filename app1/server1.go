@@ -490,6 +490,7 @@ func (server *Server) handleRPush(request []string) (string, error) {
 		return "$-1\r\n", err
 	}
 	server.notifyBlockingClients(request[0])
+	print("Done notifying, responding for rpush with listsize = ", listsize, "\n")
 	return fmt.Sprintf(":" + strconv.Itoa(listsize) + "\r\n"), nil
 }
 func (server *Server) handleLPush(request []string) (string, error) {
@@ -503,11 +504,19 @@ func (server *Server) handleLPush(request []string) (string, error) {
 
 func (server *Server) notifyBlockingClients(key string) {
 	server.mutex.Lock()
+	server.resultmutex.Lock()
 	defer server.mutex.Unlock()
+	defer server.resultmutex.Unlock()
 
 	if clients, ok := server.blockingClients[key]; ok && len(clients) > 0 {
 		print("Waking up blocking client for key = ", key)
 		// ✅ Only wake the FIRST waiting client (FIFO)
+		// for {
+		clients = server.blockingClients[key]
+		// if len(clients) == 0 {
+		// 	print("No more blocking clients for key = ", key, "\n")
+		// 	break
+		// }
 		client := clients[0]
 
 		// ✅ Pop an item from the list (we’re here because LPUSH/RPUSH was called)
@@ -516,13 +525,31 @@ func (server *Server) notifyBlockingClients(key string) {
 		// ✅ Build proper BLPOP response
 		response := ToRespArray([]string{key, entry})
 
-		// ✅ Send the response to the blocked client
-		client.conn.conn.Write([]byte(response))
-		// ✅ Remove client from the wait queue
-		server.blockingClients[key] = clients[1:]
-		if len(server.blockingClients[key]) == 0 {
-			delete(server.blockingClients, key)
+		if client.timeout <= 0.000 {
+			print("Writing to the connection for client = ", client.conn.conn.RemoteAddr().String(), " with response = ", response, "\n")
+			// I want this to be written after the blocking client is woken up
+			client.conn.conn.Write([]byte(response))
+		} else {
+			if _, ok := server.blockingResults[key]; !ok {
+				server.blockingResults[key] = make(map[string]*BlockingResult)
+			}
+			server.blockingResults[key][client.conn.conn.RemoteAddr().String()] = &BlockingResult{
+				conn:   client.conn,
+				key:    key,
+				result: entry,
+			}
+			// }
+
+			// ✅ Send the response to the blocked client
+
+			// ✅ Remove client from the wait queue
+			server.blockingClients[key] = clients[1:]
+
+			if len(server.blockingClients[key]) == 0 {
+				delete(server.blockingClients, key)
+			}
 		}
+
 	}
 }
 
@@ -574,10 +601,13 @@ func (server *Server) handleMultiPop(key string, count string) (string, error) {
 	return ToRespArray(pop_element), nil
 }
 func (server *Server) handleBLPOP(key string, timestr string, client string) (string, error) {
-	timeout, _ := strconv.Atoi(timestr)
+	// timeout, _ := strconv.Atoi(timestr)
+	timeout, _ := strconv.ParseFloat(timestr, 64)
 
 	// ✅ First check if there’s already data in the list
+	server.mutex.Lock()
 	entries, ok := server.storage.rpush_list[key]
+	server.mutex.Unlock()
 	if ok && len(entries) > 0 {
 		entry, _ := server.storage.lpop(key)
 		return ToRespArray([]string{key, entry}), nil
@@ -588,43 +618,102 @@ func (server *Server) handleBLPOP(key string, timestr string, client string) (st
 		conn:       server.conn[client],
 		key:        key,
 		resultChan: make(chan string, 1),
+		timeout:    timeout,
 	}
 
 	server.mutex.Lock()
 	server.blockingClients[key] = append(server.blockingClients[key], blockingClient)
-	print("Registered blocking client for key = ", key, " with number of clients = ", len(server.blockingClients[key]))
+	print("Registered blocking client for key = ", key, " with number of clients = ", len(server.blockingClients[key]), "current time = ", time.Now().String(), "\n")
 	server.mutex.Unlock()
 
 	// ✅ If timeout > 0, schedule a timeout handler
-	if timeout > 0 {
-		go func() {
-			<-time.After(time.Duration(timeout) * time.Second) // Redis uses seconds for timeout
-			server.mutex.Lock()
-			defer server.mutex.Unlock()
-
-			// Find the client in blockingClients for this key
-			if clients, ok := server.blockingClients[key]; ok {
-				for i, c := range clients {
-					if c == blockingClient {
-						// ✅ Send (nil) to the client to indicate timeout
-						c.conn.conn.Write([]byte("$-1\r\n"))
-
-						// ✅ Remove this client from the waiting list
-						print("Timeout for blocking client for key = ", key)
-						server.blockingClients[key] = append(clients[:i], clients[i+1:]...)
-						if len(server.blockingClients[key]) == 0 {
-							print("No more blocking clients for key = ", key)
-							delete(server.blockingClients, key)
-						}
-						break
-					}
-				}
-			}
-		}()
+	// check if timeout is greater than 0
+	print("Timeout for blocking client for key = ", key, " with timeout = ", timeout, " current time = ", time.Now().String(), "\n")
+	if timeout <= 0.0 {
+		print("Returning from blocking client registered for key = ", key, " with timeout = ", timeout, " current time = ", time.Now().String(), "\n")
+		// ✅ IMPORTANT: Return empty response — we’ll respond later when LPUSH/RPUSH happens
+		return "", nil
 	}
+	// if timeout > 0.0 {
+	// Imp TODO: don't call this, wait here using select channel, return only when timeout == 0
+	// in case of resultChan, we don't need the
+	// select {
+	// case <-blockingClient.resultChan:
+	// print("Blocking client for key = ", key, " woke up with result = ", <-blockingClient.resultChan, " current time = ", time.Now().String())
+	// entry, _ := server.storage.lpop(key)
+	// answer := []string{key}
+	// answer = append(answer, entry)
 
-	// ✅ IMPORTANT: Return empty response — we’ll respond later when LPUSH/RPUSH happens
-	return "", nil
+	// return ToRespArray(answer), nil
+
+	// <-time.After(time.Duration(timeout*1000) * time.Second)
+	// wait for timeout
+	// <-time.After(time.Duration(timeout * float64(time.Second)))
+	time.Sleep(time.Duration(timeout*1000) * time.Millisecond)
+	print("Blocking client for key = ", key, " timed out after ", timeout, " seconds, current time = ", time.Now().String(), "\n")
+	// ✅ Send (nil) to the client to indicate timeout
+	server.mutex.Lock()
+	defer server.mutex.Unlock()
+	if _, ok := server.blockingResults[key]; ok {
+		if _, ok := server.blockingResults[key][client]; ok {
+			response := server.blockingResults[key][client].result
+			// server.conn[client].conn.Write([]byte(ToRespArray([]string{key, response})))
+			delete(server.blockingResults[key], client)
+			if len(server.blockingResults[key]) == 0 {
+				print("No more blocking results for key = ", key, "\n")
+				delete(server.blockingResults, key)
+			}
+			return ToRespArray([]string{key, response}), nil
+		}
+	}
+	response := "$-1\r\n"
+	// Find the client in blockingClients for this key
+	if clients, ok := server.blockingClients[key]; ok {
+		for i, c := range clients {
+			if c == blockingClient {
+				// ✅ Send (nil) to the client to indicate timeout
+				// c.conn.conn.Write([]byte("$-1\r\n"))
+				response = "$-1\r\n"
+
+				// ✅ Remove this client from the waiting list
+				print("Timeout for blocking client for key = ", key, "\n")
+				server.blockingClients[key] = append(clients[:i], clients[i+1:]...)
+				if len(server.blockingClients[key]) == 0 {
+					print("No more blocking clients for key = ", key, "\n")
+					delete(server.blockingClients, key)
+				}
+				break
+			}
+		}
+	}
+	return response, nil
+	// go func() {
+	// 	<-time.After(time.Duration(timeout) * time.Second) // Redis uses seconds for timeout
+	// 	print("After timeout for key = ", key, "current time = ", time.Now().String())
+	// 	server.mutex.Lock()
+	// 	defer server.mutex.Unlock()
+
+	// 	// Find the client in blockingClients for this key
+	// 	if clients, ok := server.blockingClients[key]; ok {
+	// 		for i, c := range clients {
+	// 			if c == blockingClient {
+	// 				// ✅ Send (nil) to the client to indicate timeout
+	// 				c.conn.conn.Write([]byte("$-1\r\n"))
+
+	// 				// ✅ Remove this client from the waiting list
+	// 				print("Timeout for blocking client for key = ", key)
+	// 				server.blockingClients[key] = append(clients[:i], clients[i+1:]...)
+	// 				if len(server.blockingClients[key]) == 0 {
+	// 					print("No more blocking clients for key = ", key)
+	// 					delete(server.blockingClients, key)
+	// 				}
+	// 				break
+	// 			}
+	// 		}
+	// 	}
+	// server.conn[client].conn.Write([]byte("$-1\r\n")) // Send empty response to indicate timeout
+	// }()
+	// }
 }
 
 // func (server *Server) handleBLPOP_orig(key string, timestr string) (string, error) {
@@ -1305,6 +1394,7 @@ func (server *Server) handleRequest(request []string, offset int, client string)
 
 func (server *Server) handle(client string) {
 	defer server.conn[client].conn.Close()
+	print("Handling client %s\n", client)
 	//load the rdb file
 
 	if server.opts.Dir != "" && server.opts.DbFileName != "" {

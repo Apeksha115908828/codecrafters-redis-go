@@ -268,6 +268,11 @@ func (store *Storage) lpop(key string) (string, error) {
 		return "", nil
 	}
 	answer := store.rpush_list[key][0]
+	if len(store.rpush_list[key]) == 1 {
+		delete(store.rpush_list, key)
+		return answer, nil
+	}
+
 	store.rpush_list[key] = store.rpush_list[key][1:]
 	return answer, nil
 }
