@@ -1246,17 +1246,17 @@ func (server *Server) handleRequest(request []string, offset int, client string)
 	print("handleRequest called with request = %s and offset = %d\n", request, offset)
 	var err error
 	response := ""
-	// if _, ok := server.issubscribed[client]; ok {
-	// 	// If the client is subscribed, we need to handle the message differently
-	// 	if _, ok := subscribeModeCommands[request[0]]; !ok {
-	// 		error_msg := fmt.Sprintf("-ERR Can't execute '%s': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context\r\n", request[0])
-	// 		return error_msg, offset, nil
-	// 	}
-	// 	if request[0] == "PING" {
-	// 		return ToRespArray([]string{"+PONG", ""}), offset, nil
-	// 	}
-	// 	//handle subscribe mode commands
-	// }
+	if _, ok := server.issubscribed[client]; ok && server.issubscribed[client] {
+		// If the client is subscribed, we need to handle the message differently
+		if _, ok := subscribeModeCommands[request[0]]; !ok {
+			error_msg := fmt.Sprintf("-ERR Can't execute '%s': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context\r\n", request[0])
+			return error_msg, offset, nil
+		}
+		if request[0] == "PING" {
+			return ToRespArray([]string{"+PONG", ""}), offset, nil
+		}
+		//handle subscribe mode commands
+	}
 	switch strings.ToUpper(request[0]) {
 	case "PING":
 		response, err = server.handlePing()
