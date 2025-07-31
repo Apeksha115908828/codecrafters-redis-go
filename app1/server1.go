@@ -572,7 +572,7 @@ func (server *Server) handleSubscribe(request []string, client string) (string, 
 	topic := request[0]
 	server.mutex.Lock()
 	defer server.mutex.Unlock()
-	if _, ok := server.issubscribed[client]; !ok {
+	if _, ok := server.issubscribed[client]; !ok || !server.issubscribed[client] {
 		server.issubscribed[client] = true
 	}
 	if _, ok := server.subscribedClients[topic]; !ok {
