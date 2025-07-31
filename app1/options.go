@@ -45,9 +45,12 @@ type MasterConfig struct {
 }
 
 type Server struct {
-	conn    map[string]*Connection
-	opts    Opts
-	storage *Storage
+	conn              map[string]*Connection
+	issubscribed      map[string]bool
+	subscribedClients map[string][]string // map of topics to list of clients subscribed to that topic
+	subscribedTopics  map[string][]string // map of clients to list of topics subscribed to that client
+	opts              Opts
+	storage           *Storage
 
 	mc *MasterConfig
 	// isqueuing       bool
@@ -121,6 +124,8 @@ func NewMaster(conn *Connection, opts Opts, mc *MasterConfig) *Server {
 	isqueuingval[conn.conn.RemoteAddr().String()] = false
 	queueval := make(map[string][][]string)
 	queueval[conn.conn.RemoteAddr().String()] = make([][]string, 0)
+	issubscribedval := make(map[string]bool)
+	issubscribedval[conn.conn.RemoteAddr().String()] = false
 	return &Server{
 		conn:    connections,
 		opts:    opts,
@@ -129,12 +134,15 @@ func NewMaster(conn *Connection, opts Opts, mc *MasterConfig) *Server {
 		mc: mc,
 		// 		isqueuing:       false,
 		// queue:           make([][]string, 0),
-		isqueuing:       isqueuingval,
-		queue:           queueval,
-		blockingClients: make(map[string][]*BlockingClient),
-		mutex:           sync.RWMutex{},
-		blockingResults: make(map[string](map[string]*BlockingResult)), // map of key to map of blockingresult
-		resultmutex:     sync.RWMutex{},
+		isqueuing:         isqueuingval,
+		queue:             queueval,
+		blockingClients:   make(map[string][]*BlockingClient),
+		issubscribed:      issubscribedval,
+		subscribedTopics:  make(map[string][]string),
+		subscribedClients: make(map[string][]string),
+		mutex:             sync.RWMutex{},
+		blockingResults:   make(map[string](map[string]*BlockingResult)), // map of key to map of blockingresult
+		resultmutex:       sync.RWMutex{},
 	}
 }
 
@@ -142,12 +150,15 @@ func NewReplica(conn *Connection, opts Opts) *Server {
 	connections := make(map[string]*Connection)
 	connections[conn.conn.RemoteAddr().String()] = conn
 	return &Server{
-		conn:            connections,
-		opts:            opts,
-		storage:         storage, //TODO: what to put here??
-		blockingClients: make(map[string][]*BlockingClient),
-		mutex:           sync.RWMutex{},
-		blockingResults: make(map[string](map[string]*BlockingResult)), // map of key to map of blockingresult
-		resultmutex:     sync.RWMutex{},
+		conn:              connections,
+		opts:              opts,
+		storage:           storage, //TODO: what to put here??
+		blockingClients:   make(map[string][]*BlockingClient),
+		issubscribed:      make(map[string]bool),
+		subscribedTopics:  make(map[string][]string),
+		subscribedClients: make(map[string][]string),
+		mutex:             sync.RWMutex{},
+		blockingResults:   make(map[string](map[string]*BlockingResult)), // map of key to map of blockingresult
+		resultmutex:       sync.RWMutex{},
 	}
 }

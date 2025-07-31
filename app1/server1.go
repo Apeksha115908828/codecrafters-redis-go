@@ -26,6 +26,19 @@ import (
 	//rdb parser library
 )
 
+// create set of command that are allowed in subscribe mode
+// TODO: change this to map or something
+var subscribeModeCommands = map[string]bool{
+	"SUBSCRIBE":    true,
+	"PSUBSCRIBE":   true,
+	"UNSUBSCRIBE":  true,
+	"PUNSUBSCRIBE": true,
+	"PING":         true,
+	"QUIT":         true,
+}
+
+// var subscribeModeCommands = []string{"SUBSCRIBE", "PSUBSCRIBE", "UNSUBSCRIBE", "PUNSUBSCRIBE", "PING", "QUIT"}
+
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
 	fmt.Println("Logs from your program will appear here!")
@@ -51,6 +64,7 @@ func main() {
 type SimpleString string
 
 func handleMaster(opts Opts) {
+	// print("Handling master with opts = ", opts, "\n")
 	listener, err := net.Listen("tcp", "0.0.0.0:"+opts.Port)
 	if err != nil {
 		fmt.Println("Failed to bind to port", opts.Port)
@@ -289,6 +303,8 @@ func ToRespArray(arr []string) string {
 
 	return respArr
 }
+
+// func ToMixedRespArray(arr map[])
 func (server *Server) handleSet(request []string, client string) (string, error) {
 	// EX for second, PX for milli second
 	key := request[0]
@@ -552,21 +568,92 @@ func (server *Server) notifyBlockingClients(key string) {
 
 	}
 }
+func (server *Server) handleSubscribe(request []string, client string) (string, error) {
+	topic := request[0]
+	server.mutex.Lock()
+	defer server.mutex.Unlock()
+	if _, ok := server.issubscribed[client]; !ok {
+		server.issubscribed[client] = true
+	}
+	if _, ok := server.subscribedClients[topic]; !ok {
+		server.subscribedClients[topic] = make([]string, 0)
+	}
+	server.subscribedClients[topic] = append(server.subscribedClients[topic], client)
+	fmt.Printf("Client %s subscribed to topic %s\n", client, topic)
+	if _, ok := server.subscribedTopics[client]; !ok {
+		server.subscribedTopics[client] = make([]string, 0)
+	}
+	server.subscribedTopics[client] = append(server.subscribedTopics[client], topic)
+	numchannels := len(server.subscribedTopics[client])
+	// return ToRespArray([]string{"subscribe", topic, strconv.Itoa(numchannels)}), nil
+	// add numchannels as integer to the response
+	// form an resp array with 2 bullkstrings and 1 integer
+	// return fmt.Sprintf("*3\r\n%s\r\n%s\r\n:%d\r\n", ToBulkString("subscribe"), ToBulkString(topic), numchannels), nil
+	return fmt.Sprintf("*3\r\n%s%s:%d\r\n", ToBulkString("subscribe"), ToBulkString(topic), numchannels), nil
+}
 
-//	func (server *Server) notifyBlockingClients_orig(key string) {
-//		fmt.Println("Notifying blocking clients for key = ", key)
-//		server.mutex.Lock()
-//		if clients, ok := server.blockingClients[key]; ok {
-//			fmt.Println("Notifying clients for key = ", key, " with number of clients = ", len(clients))
-//			for _, client := range clients {
-//				fmt.Println("Notifying client with key = ", client.key)
-//				client.resultChan <- key
-//				close(client.resultChan)
-//			}
-//			delete(server.blockingClients, key)
-//		}
-//		server.mutex.Unlock()
-//	}
+func (server *Server) handleUnsubscribe(request []string, client string) (string, error) {
+	topic := request[0]
+	server.mutex.Lock()
+	defer server.mutex.Unlock()
+	if _, ok := server.issubscribed[client]; !ok {
+		return "", fmt.Errorf("client %s is not subscribed to any topic", client)
+	}
+	if _, ok := server.subscribedClients[topic]; !ok {
+		return "", fmt.Errorf("client %s is not subscribed to topic %s", client,
+			topic)
+	}
+	// Remove the client from the subscribedClients map
+	for i, c := range server.subscribedClients[topic] {
+		if c == client {
+			server.subscribedClients[topic] = append(server.subscribedClients[topic][:i], server.subscribedClients[topic][i+1:]...)
+			break
+		}
+	}
+	// Remove the topic from the subscribedTopics map
+	for i, t := range server.subscribedTopics[client] {
+		if t == topic {
+			server.subscribedTopics[client] = append(server.subscribedTopics[client][:i], server.subscribedTopics[client][i+1:]...)
+			break
+		}
+	}
+	// If the client is not subscribed to any topic, remove it from the issubscribed map
+	if len(server.subscribedTopics[client]) == 0 {
+		delete(server.issubscribed, client)
+	}
+	numchannels := len(server.subscribedTopics[client])
+	if numchannels == 0 {
+		delete(server.subscribedClients, topic)
+		delete(server.subscribedTopics, topic)
+	} else {
+		server.subscribedClients[topic] = append(server.subscribedClients[topic], client)
+		server.subscribedTopics[topic] = append(server.subscribedTopics[topic], client)
+	}
+	fmt.Printf("Client %s unsubscribed from topic %s\n", client, topic)
+	// return ToRespArray([]string{"unsubscribe", topic, strconv.Itoa(numchannels)}), nil
+	return fmt.Sprintf("*3\r\n$11\r\nunsubscribe\r\n$%d\r\n%s\r\n:%d\r\n", len(topic), topic, numchannels), nil
+
+}
+
+func (server *Server) handlePublish(request []string) (string, error) {
+	topic := request[0]
+	message := request[1]
+	server.mutex.Lock()
+	defer server.mutex.Unlock()
+	if _, ok := server.subscribedClients[topic]; !ok {
+		return ":0\r\n", nil // No subscribers, return 0
+	}
+	numSubscribers := len(server.subscribedClients[topic])
+	for _, client := range server.subscribedClients[topic] {
+		if conn, ok := server.conn[client]; ok {
+			conn.conn.Write([]byte(fmt.Sprintf("*3\r\n$7\r\nMESSAGE\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n",
+				len(topic), topic, len(message), message)))
+		}
+	}
+	return fmt.Sprintf(":%d\r\n", numSubscribers), nil
+
+}
+
 func (server *Server) handleLRange(request []string) (string, error) {
 	list_elements, err := server.storage.lrange(request[0], request[1], request[2])
 	if err != nil {
@@ -604,7 +691,7 @@ func (server *Server) handleBLPOP(key string, timestr string, client string) (st
 	// timeout, _ := strconv.Atoi(timestr)
 	timeout, _ := strconv.ParseFloat(timestr, 64)
 
-	// ✅ First check if there’s already data in the list
+	// First check if there’s already data in the list
 	server.mutex.Lock()
 	entries, ok := server.storage.rpush_list[key]
 	server.mutex.Unlock()
@@ -613,7 +700,7 @@ func (server *Server) handleBLPOP(key string, timestr string, client string) (st
 		return ToRespArray([]string{key, entry}), nil
 	}
 
-	// ✅ Otherwise, register the client as “blocked”
+	// Otherwise, register the client as “blocked”
 	blockingClient := &BlockingClient{
 		conn:       server.conn[client],
 		key:        key,
@@ -626,12 +713,11 @@ func (server *Server) handleBLPOP(key string, timestr string, client string) (st
 	print("Registered blocking client for key = ", key, " with number of clients = ", len(server.blockingClients[key]), "current time = ", time.Now().String(), "\n")
 	server.mutex.Unlock()
 
-	// ✅ If timeout > 0, schedule a timeout handler
 	// check if timeout is greater than 0
 	print("Timeout for blocking client for key = ", key, " with timeout = ", timeout, " current time = ", time.Now().String(), "\n")
 	if timeout <= 0.0 {
 		print("Returning from blocking client registered for key = ", key, " with timeout = ", timeout, " current time = ", time.Now().String(), "\n")
-		// ✅ IMPORTANT: Return empty response — we’ll respond later when LPUSH/RPUSH happens
+		// IMPORTANT: Return empty response — we’ll respond later when LPUSH/RPUSH happens
 		return "", nil
 	}
 	// if timeout > 0.0 {
@@ -651,7 +737,7 @@ func (server *Server) handleBLPOP(key string, timestr string, client string) (st
 	// <-time.After(time.Duration(timeout * float64(time.Second)))
 	time.Sleep(time.Duration(timeout*1000) * time.Millisecond)
 	print("Blocking client for key = ", key, " timed out after ", timeout, " seconds, current time = ", time.Now().String(), "\n")
-	// ✅ Send (nil) to the client to indicate timeout
+	// Send (nil) to the client to indicate timeout
 	server.mutex.Lock()
 	defer server.mutex.Unlock()
 	if _, ok := server.blockingResults[key]; ok {
@@ -671,11 +757,11 @@ func (server *Server) handleBLPOP(key string, timestr string, client string) (st
 	if clients, ok := server.blockingClients[key]; ok {
 		for i, c := range clients {
 			if c == blockingClient {
-				// ✅ Send (nil) to the client to indicate timeout
+				// Send (nil) to the client to indicate timeout
 				// c.conn.conn.Write([]byte("$-1\r\n"))
 				response = "$-1\r\n"
 
-				// ✅ Remove this client from the waiting list
+				// Remove this client from the waiting list
 				print("Timeout for blocking client for key = ", key, "\n")
 				server.blockingClients[key] = append(clients[:i], clients[i+1:]...)
 				if len(server.blockingClients[key]) == 0 {
@@ -687,86 +773,7 @@ func (server *Server) handleBLPOP(key string, timestr string, client string) (st
 		}
 	}
 	return response, nil
-	// go func() {
-	// 	<-time.After(time.Duration(timeout) * time.Second) // Redis uses seconds for timeout
-	// 	print("After timeout for key = ", key, "current time = ", time.Now().String())
-	// 	server.mutex.Lock()
-	// 	defer server.mutex.Unlock()
-
-	// 	// Find the client in blockingClients for this key
-	// 	if clients, ok := server.blockingClients[key]; ok {
-	// 		for i, c := range clients {
-	// 			if c == blockingClient {
-	// 				// ✅ Send (nil) to the client to indicate timeout
-	// 				c.conn.conn.Write([]byte("$-1\r\n"))
-
-	// 				// ✅ Remove this client from the waiting list
-	// 				print("Timeout for blocking client for key = ", key)
-	// 				server.blockingClients[key] = append(clients[:i], clients[i+1:]...)
-	// 				if len(server.blockingClients[key]) == 0 {
-	// 					print("No more blocking clients for key = ", key)
-	// 					delete(server.blockingClients, key)
-	// 				}
-	// 				break
-	// 			}
-	// 		}
-	// 	}
-	// server.conn[client].conn.Write([]byte("$-1\r\n")) // Send empty response to indicate timeout
-	// }()
-	// }
 }
-
-// func (server *Server) handleBLPOP_orig(key string, timestr string) (string, error) {
-// 	timeout, _ := strconv.Atoi(timestr)
-// 	entries, ok := server.storage.rpush_list[key]
-// 	if !ok || len(entries) == 0 {
-// 		// handle key not present
-// 		if timeout == 0 {
-// 			print("Handle BLPOP called for key = ", key, " with timeout = ", timeout)
-// 			blockingClient := &BlockingClient{
-// 				conn:       server.conn,
-// 				key:        key,
-// 				resultChan: make(chan string, 1),
-// 			}
-// 			server.mutex.Lock()
-// 			server.blockingClients[key] = append(server.blockingClients[key], blockingClient)
-// 			server.mutex.Unlock()
-// 			key = <-blockingClient.resultChan
-// 			entry, _ := server.storage.lpop(key)
-// 			answer := []string{key}
-// 			answer = append(answer, entry)
-// 			return ToRespArray(answer), nil
-// 		} else {
-// 			blockingClient := &BlockingClient{
-// 				conn:       server.conn,
-// 				key:        key,
-// 				resultChan: make(chan string, 1),
-// 			}
-// 			server.mutex.Lock()
-// 			server.blockingClients[key] = append(server.blockingClients[key], blockingClient)
-// 			server.mutex.Unlock()
-// 			select {
-// 			case <-blockingClient.resultChan:
-// 				entry, _ := server.storage.lpop(key)
-// 				answer := []string{key}
-// 				answer = append(answer, entry)
-// 				return ToRespArray(answer), nil
-// 			case <-time.After(time.Duration(timeout) * time.Millisecond):
-// 				entry, _ := server.storage.lpop(key)
-// 				answer := []string{key}
-// 				answer = append(answer, entry)
-// 				return ToRespArray(answer), nil
-// 			}
-// 		}
-// 	} else {
-// 		entry, _ := server.storage.lpop(key)
-// 		answer := []string{key}
-// 		answer = append(answer, entry)
-// 		print("BLPOP returning answer = %s", answer)
-// 		return ToRespArray(answer), nil
-// 		// return "$-1\r\n", nil
-// 	}
-// }
 
 func (server *Server) handleXADD(request []string) (string, error) {
 	fmt.Printf("len(request) = %d", len(request))
@@ -1240,9 +1247,20 @@ func (server *Server) parseString(b byte, reader *bufio.Reader) (string, error) 
 }
 
 func (server *Server) handleRequest(request []string, offset int, client string) (string, int, error) {
-	// print("handleRequest called with request = %s and offset = %d\n", request, offset)
+	print("handleRequest called with request = %s and offset = %d\n", request, offset)
 	var err error
 	response := ""
+	// if _, ok := server.issubscribed[client]; ok {
+	// 	// If the client is subscribed, we need to handle the message differently
+	// 	if _, ok := subscribeModeCommands[request[0]]; !ok {
+	// 		error_msg := fmt.Sprintf("-ERR Can't execute '%s': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context\r\n", request[0])
+	// 		return error_msg, offset, nil
+	// 	}
+	// 	if request[0] == "PING" {
+	// 		return ToRespArray([]string{"+PONG", ""}), offset, nil
+	// 	}
+	// 	//handle subscribe mode commands
+	// }
 	switch strings.ToUpper(request[0]) {
 	case "PING":
 		response, err = server.handlePing()
@@ -1386,6 +1404,24 @@ func (server *Server) handleRequest(request []string, offset int, client string)
 			break
 		}
 		response, err = server.handleXREAD(request[1:])
+	case "SUBSCRIBE":
+		if len(request) < 2 {
+			fmt.Printf("%s Command expects an argument\n", request[0])
+			break
+		}
+		response, err = server.handleSubscribe(request[1:], client)
+	case "UNSUBSCRIBE":
+		if len(request) < 2 {
+			fmt.Printf("%s Command expects an argument\n", request[0])
+			break
+		}
+		response, err = server.handleUnsubscribe(request[1:], client)
+	case "PUBLISH":
+		if len(request) < 3 {
+			fmt.Printf("%s Command expects an argument\n", request[0])
+			break
+		}
+		response, err = server.handlePublish(request[1:])
 	default:
 		//handle default
 	}
