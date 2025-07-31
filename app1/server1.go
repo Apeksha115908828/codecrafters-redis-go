@@ -585,10 +585,6 @@ func (server *Server) handleSubscribe(request []string, client string) (string, 
 	}
 	server.subscribedTopics[client] = append(server.subscribedTopics[client], topic)
 	numchannels := len(server.subscribedTopics[client])
-	// return ToRespArray([]string{"subscribe", topic, strconv.Itoa(numchannels)}), nil
-	// add numchannels as integer to the response
-	// form an resp array with 2 bullkstrings and 1 integer
-	// return fmt.Sprintf("*3\r\n%s\r\n%s\r\n:%d\r\n", ToBulkString("subscribe"), ToBulkString(topic), numchannels), nil
 	return fmt.Sprintf("*3\r\n%s%s:%d\r\n", ToBulkString("subscribe"), ToBulkString(topic), numchannels), nil
 }
 
