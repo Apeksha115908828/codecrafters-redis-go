@@ -642,7 +642,7 @@ func (server *Server) handlePublish(request []string) (string, error) {
 	numSubscribers := len(server.subscribedClients[topic])
 	for _, client := range server.subscribedClients[topic] {
 		if conn, ok := server.conn[client]; ok {
-			conn.conn.Write([]byte(fmt.Sprintf("*3\r\n$7\r\nMESSAGE\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n",
+			conn.conn.Write([]byte(fmt.Sprintf("*3\r\n$7\r\nmessage\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n",
 				len(topic), topic, len(message), message)))
 		}
 	}
