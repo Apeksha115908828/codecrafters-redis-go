@@ -615,7 +615,8 @@ func (server *Server) handleUnsubscribe(request []string, client string) (string
 	}
 	// If the client is not subscribed to any topic, remove it from the issubscribed map
 	if len(server.subscribedTopics[client]) == 0 {
-		delete(server.issubscribed, client)
+		// delete(server.issubscribed, client)
+		server.issubscribed[client] = false
 	}
 	numchannels := len(server.subscribedTopics[client])
 	if numchannels == 0 {
