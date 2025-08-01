@@ -629,7 +629,8 @@ func (server *Server) handleUnsubscribe(request []string, client string) (string
 	// }
 	fmt.Printf("Client %s unsubscribed from topic %s\n", client, topic)
 	// return ToRespArray([]string{"unsubscribe", topic, strconv.Itoa(numchannels)}), nil
-	return fmt.Sprintf("*3\r\n$11\r\nunsubscribe\r\n$%d\r\n%s\r\n:%d\r\n", len(topic), topic, numchannels), nil
+	// return fmt.Sprintf("*3\r\n$11\r\nunsubscribe\r\n$%d\r\n%s\r\n:%d\r\n", len(topic), topic, numchannels), nil
+	return fmt.Sprintf("*3\r\n%s%s:%d\r\n", ToBulkString("unsubscribe"), ToBulkString(topic), numchannels), nil
 
 }
 
