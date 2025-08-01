@@ -1243,7 +1243,7 @@ func (server *Server) parseString(b byte, reader *bufio.Reader) (string, error) 
 }
 
 func (server *Server) handleRequest(request []string, offset int, client string) (string, int, error) {
-	print("handleRequest called with request = %s and offset = %d\n", request, offset)
+	// print("handleRequest called with request = %s and offset = %d\n", request[0], offset)
 	var err error
 	response := ""
 	if _, ok := server.issubscribed[client]; ok && server.issubscribed[client] {
@@ -1252,8 +1252,10 @@ func (server *Server) handleRequest(request []string, offset int, client string)
 			error_msg := fmt.Sprintf("-ERR Can't execute '%s': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context\r\n", request[0])
 			return error_msg, offset, nil
 		}
-		if request[0] == "PING" {
-			return ToRespArray([]string{"+PONG", ""}), offset, nil
+		if strings.ToUpper(request[0]) == "PING" {
+			println("got ping in subscribe mode")
+			// return ToRespArray([]string{ToBulkString("pong"), ToBulkString("")}), offset, nil
+			return "*2\r\n$4\r\npong\r\n$0\r\n\r\n", offset, nil
 		}
 		//handle subscribe mode commands
 	}
