@@ -1251,7 +1251,7 @@ func (server *Server) parseString(b byte, reader *bufio.Reader) (string, error) 
 }
 
 func (server *Server) handleRequest(request []string, offset int, client string) (string, int, error) {
-	// print("handleRequest called with request = %s and offset = %d\n", request[0], offset)
+	print("handleRequest called with request = %s and offset = %d\n", request[0], offset)
 	var err error
 	response := ""
 	if _, ok := server.issubscribed[client]; ok && server.issubscribed[client] {
