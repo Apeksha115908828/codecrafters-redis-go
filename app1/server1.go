@@ -114,7 +114,7 @@ func handleReplica(opts Opts) {
 	}
 	server := NewReplica(connection, opts)
 	//handshake
-	server.sendHandshake(opts, connection.conn.RemoteAddr().String())
+	server.sendHandshake(connection.conn.RemoteAddr().String())
 
 	//handle
 	server.handle(connection.conn.RemoteAddr().String())
@@ -1547,7 +1547,7 @@ func (conn *Connection) readLine() (int, string, error) {
 	return bytesRead, str, err
 }
 
-func (server *Server) sendHandshake(opts Opts, client string) error {
+func (server *Server) sendHandshake(client string) error {
 	fmt.Println("sending ping")
 
 	_, err := server.conn[client].conn.Write([]byte("*1\r\n$4\r\nPING\r\n"))
