@@ -64,6 +64,7 @@ func main() {
 type SimpleString string
 
 func handleMaster(opts Opts) {
+	fmt.Println("Starting master server....")
 	// print("Handling master with opts = ", opts, "\n")
 	listener, err := net.Listen("tcp", "0.0.0.0:"+opts.Port)
 	if err != nil {
