@@ -653,6 +653,11 @@ func (server *Server) handlePublish(request []string) (string, error) {
 
 }
 
+func (server *Server) handleZAdd(key string, score string, member string) (string, error) {
+	num_members, _ := server.storage.zadd(key, score, member)
+	// num_members := 1
+	return ":" + strconv.Itoa(num_members) + "\r\n", nil
+}
 func (server *Server) handleLRange(request []string) (string, error) {
 	list_elements, err := server.storage.lrange(request[0], request[1], request[2])
 	if err != nil {
@@ -1423,6 +1428,12 @@ func (server *Server) handleRequest(request []string, offset int, client string)
 			break
 		}
 		response, err = server.handlePublish(request[1:])
+	case "ZADD":
+		if len(request) != 4 {
+			fmt.Printf("%s Command expects 3 arguments\n", request[0])
+			break
+		}
+		response, err = server.handleZAdd(request[1], request[2], request[3])
 	default:
 		//handle default
 	}

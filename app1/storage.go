@@ -31,6 +31,9 @@ type Storage struct {
 	db         map[string]*DataEntry // client -> key -> DataEntry
 	stream     map[string][]*StreamEntry
 	rpush_list map[string][]string
+	// create a map of sorted sets, which keeps entries in each key entry sorted with the score
+	// Redis implements sorted sets using a combination of hash table and skip list.
+	sorted_sets map[string]*SkipList
 	// db         map[string](map[string]*DataEntry) // client -> key -> DataEntry
 	// rpush_list []string
 }
@@ -330,6 +333,20 @@ func (store *Storage) lrange(key string, lower_s string, upper_s string) ([]stri
 	}
 }
 
+func (store *Storage) zadd(key string, score_string string, member string) (int, error) {
+	// Check if the sorted set exists, if not create it
+	if _, ok := store.sorted_sets[key]; !ok {
+		store.sorted_sets[key] = New()
+	}
+	score, err := strconv.ParseFloat(score_string, 64)
+	if err != nil {
+		return -1, err
+	}
+	// Add the member to the sorted set
+	store.sorted_sets[key].Add(Entry{Member: member, Score: score})
+	return store.sorted_sets[key].len, nil
+}
+
 func NewStore() *Storage {
 	fmt.Println("Came to create a new store")
 	return &Storage{
@@ -337,5 +354,7 @@ func NewStore() *Storage {
 		// db:         make(map[string](map[string]*DataEntry)),
 		stream:     make(map[string][]*StreamEntry),
 		rpush_list: make(map[string][]string),
+		// sorted_sets: make(map[string][]*SortedSetEntry),
+		sorted_sets: make(map[string]*SkipList),
 	}
 }
