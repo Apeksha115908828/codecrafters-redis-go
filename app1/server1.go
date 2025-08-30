@@ -1526,7 +1526,7 @@ func (server *Server) handle(client string) {
 	}
 }
 
-func (conn *Connection) readLine() (int, string, error) {
+func (conn1 *Connection) readLine() (int, string, error) {
 	// str, err := conn.reader.ReadString('\n')
 	// str1, _, err := conn.reader.ReadLine()
 	// str := string(str1)
