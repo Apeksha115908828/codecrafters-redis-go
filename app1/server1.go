@@ -41,7 +41,7 @@ var subscribeModeCommands = map[string]bool{
 
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	fmt.Println("Logs from your program will appear here!")
+	// fmt.Printf("Logs from your program will appear here!")
 
 	var opts Opts
 	_, err := flags.Parse(&opts)
@@ -66,7 +66,7 @@ type SimpleString string
 func handleMaster(opts Opts) {
 	fmt.Println("Starting master server....")
 	// print("Handling master with opts = ", opts, "\n")
-	listener, err := net.Listen("tcp", "0.0.0.0:"+opts.Port)
+	listener, err := net.Listen("tcp", ":"+opts.Port)
 	if err != nil {
 		fmt.Println("Failed to bind to port", opts.Port)
 		os.Exit(1)
@@ -171,8 +171,8 @@ func (conn *Connection) Read() (int, []string, error) {
 }
 func (server *Server) handlePing() (string, error) {
 	if server.opts.Role == "master" {
-		// _, err := server.conn.conn.Write([]byte("+PONG\r\n"))
-		return "+PONG\r\n", nil
+		// _, err := server.conn.conn.Write([]byte("+PLONG\r\n"))
+		return "+PLONG\r\n", nil
 		// if err != nil {
 		// 	return fmt.Errorf("HandlePing::Write to connection failed with %v", err)
 		// }
@@ -781,13 +781,13 @@ func (server *Server) handleBLPOP(key string, timestr string, client string) (st
 }
 
 func (server *Server) handleXADD(request []string) (string, error) {
-	fmt.Printf("len(request) = %d", len(request))
+	// fmt.Printf("len(request) = %d", len(request))
 
 	key := request[0]
 	id := request[1]
 	if strings.Contains(id, "*") {
 		id = server.storage.autoGenerateID(key, id)
-		fmt.Printf("generated id = %s", id)
+		// fmt.Printf("generated id = %s", id)
 	}
 	err, isValid := server.storage.checkIDValidity(key, id)
 	if isValid {
@@ -1252,7 +1252,7 @@ func (server *Server) parseString(b byte, reader *bufio.Reader) (string, error) 
 }
 
 func (server *Server) handleRequest(request []string, offset int, client string) (string, int, error) {
-	print("handleRequest called with request = %s and offset = %d\n", request[0], offset)
+	// fmt.Printf("handleRequest called with request = %s and offset = %d\n", request[0], offset)
 	var err error
 	response := ""
 	if _, ok := server.issubscribed[client]; ok && server.issubscribed[client] {
@@ -1263,8 +1263,8 @@ func (server *Server) handleRequest(request []string, offset int, client string)
 		}
 		if strings.ToUpper(request[0]) == "PING" {
 			println("got ping in subscribe mode")
-			// return ToRespArray([]string{ToBulkString("pong"), ToBulkString("")}), offset, nil
-			return "*2\r\n$4\r\npong\r\n$0\r\n\r\n", offset, nil
+			// return ToRespArray([]string{ToBulkString("PLONG"), ToBulkString("")}), offset, nil
+			return "*2\r\n$4\r\nPLONG\r\n$0\r\n\r\n", offset, nil
 		}
 		//handle subscribe mode commands
 	}
@@ -1526,7 +1526,7 @@ func (server *Server) handle(client string) {
 	}
 }
 
-func (conn1 *Connection) readLine() (int, string, error) {
+func (conn *Connection) readLine() (int, string, error) {
 	// str, err := conn.reader.ReadString('\n')
 	// str1, _, err := conn.reader.ReadLine()
 	// str := string(str1)
@@ -1562,8 +1562,8 @@ func (server *Server) sendHandshake(client string) error {
 		return fmt.Errorf("reading from connection failed %v", err)
 	}
 
-	if response != "+PONG" {
-		return fmt.Errorf("didn't receive \"PONG\": received %s", response)
+	if response != "+PLONG" {
+		return fmt.Errorf("didn't receive \"PLONG\": received %s", response)
 	}
 
 	_, err = server.conn[client].conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n"))
