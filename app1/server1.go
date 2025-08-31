@@ -66,7 +66,7 @@ type SimpleString string
 func handleMaster(opts Opts) {
 	fmt.Println("Starting master server....")
 	// print("Handling master with opts = ", opts, "\n")
-	listener, err := net.Listen("tcp", "::1"+opts.Port)
+	listener, err := net.Listen("tcp", "127.0.0.1"+opts.Port)
 	if err != nil {
 		fmt.Println("Failed to bind to port", opts.Port)
 		os.Exit(1)
